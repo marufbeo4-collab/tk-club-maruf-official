@@ -25,8 +25,6 @@ from telegram.ext import (
 # =========================
 # CONFIG (SET TOKEN IN ENV)
 # =========================
-# IMPORTANT: Put your bot token in environment variable BOT_TOKEN
-# Example (Render/Heroku): BOT_TOKEN=123:ABC...
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 
 # --- BRANDING & LINKS ---
@@ -184,12 +182,7 @@ class PredictionEngine:
 
         try:
             last_num = int(self.raw_history[0]["number"])
-
-            # Reverse simple logic
-            if (last_num + 1) % 2 == 0:
-                prediction = "BIG"
-            else:
-                prediction = "SMALL"
+            prediction = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
 
             # Recovery override
             if current_streak_loss >= 2 and self.history:
@@ -197,7 +190,6 @@ class PredictionEngine:
 
             self.last_prediction = prediction
             return prediction
-
         except Exception:
             return random.choice(["BIG", "SMALL"])
 
@@ -232,7 +224,6 @@ class BotState:
     session_id: int = 0
     engine: PredictionEngine = field(default_factory=PredictionEngine)
     active: Optional[ActiveBet] = None
-    last_result_issue: Optional[str] = None
     last_signal_issue: Optional[str] = None
 
     wins: int = 0
@@ -254,9 +245,9 @@ state = BotState()
 
 
 # =========================
-# FETCH (POST)
+# FETCH (POST) -> RETURN LIST (FIX)
 # =========================
-def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
+def _fetch_latest_list_sync(mode: str) -> List[dict]:
     type_id = 5 if mode == "30S" else 1
 
     payload = {
@@ -280,15 +271,15 @@ def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
         r = requests.post(API_URL, json=payload, headers=headers, timeout=FETCH_TIMEOUT)
         if r.status_code == 200:
             data = r.json()
-            if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
-                return data["data"]["list"][0]  # latest CLOSED
+            lst = (((data or {}).get("data") or {}).get("list")) or []
+            return lst if isinstance(lst, list) else []
     except Exception:
         pass
 
-    return None
+    return []
 
-async def fetch_latest_issue(mode: str) -> Optional[dict]:
-    return await asyncio.to_thread(_fetch_latest_issue_sync, mode)
+async def fetch_latest_list(mode: str) -> List[dict]:
+    return await asyncio.to_thread(_fetch_latest_list_sync, mode)
 
 
 # =========================
@@ -496,11 +487,7 @@ async def stop_session(bot, reason: str = "manual"):
     if state.active:
         for cid, mid in (state.active.checking_msg_ids or {}).items():
             await safe_delete(bot, cid, mid)
-        for cid, mids in (state.active.loss_related_ids or {}).items():
-            for mid in mids:
-                await safe_delete(bot, cid, mid)
 
-    # end sticker
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
     for cid in state.selected_targets:
@@ -526,19 +513,28 @@ async def start_session(bot, mode: str):
     state.graceful_stop_requested = False
     state.engine = PredictionEngine()
     state.active = None
-    state.last_result_issue = None
     state.last_signal_issue = None
     reset_stats()
 
     stk = STICKERS["START_30S"] if mode == "30S" else STICKERS["START_1M"]
     await broadcast_sticker(bot, stk)
-    # NOTE: START_END_ALWAYS এখানে পাঠানো বাদ (এটা end টাইপ)
-    # await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
 
 # =========================
-# ENGINE LOOP (FIXED 30S LIKE 1M)
+# ENGINE LOOP (30S FIXED)
 # =========================
+def _parse_type(entry: dict) -> str:
+    try:
+        return "BIG" if int(entry.get("number", 0)) >= 5 else "SMALL"
+    except Exception:
+        return "SMALL"
+
+def _find_issue_in_list(lst: List[dict], issue: str) -> Optional[dict]:
+    for it in lst:
+        if str(it.get("issueNumber")) == str(issue):
+            return it
+    return None
+
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
 
@@ -549,34 +545,31 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
         now = datetime.now(BD_TZ)
         s = now.second
 
-        # SAFE TIME windows (same style you used)
+        # safe time windows
         if state.mode == "1M":
             is_safe_time = (s <= 50)
         else:
             slot_second = s % 30
             is_safe_time = (slot_second <= 20)
 
-        # 1) Fetch latest CLOSED from API
-        latest_data = await fetch_latest_issue(state.mode)
+        # Fetch list (latest closed + recent)
+        lst = await fetch_latest_list(state.mode)
 
         latest_issue = None
-        latest_type = None
+        latest_entry = lst[0] if lst else None
+        if latest_entry:
+            latest_issue = str(latest_entry.get("issueNumber"))
+            state.engine.update_history(latest_entry)
 
-        if latest_data:
-            try:
-                state.engine.update_history(latest_data)
-                latest_issue = str(latest_data.get("issueNumber"))
-                latest_type = "BIG" if int(latest_data.get("number")) >= 5 else "SMALL"
-            except Exception:
-                latest_issue = None
-                latest_type = None
-
-        # 2) Resolve ACTIVE BET
-        if state.active and latest_issue and latest_type:
-            # A) exact match -> result arrived
-            if state.active.predicted_issue == latest_issue:
+        # 1) If active, try to resolve using LIST search (MAIN FIX)
+        if state.active and lst:
+            hit = _find_issue_in_list(lst, state.active.predicted_issue)
+            if hit:
+                issue = str(hit.get("issueNumber"))
+                res_num = str(hit.get("number"))
+                res_type = _parse_type(hit)
                 pick = state.active.pick
-                is_win = (pick == latest_type)
+                is_win = (pick == res_type)
 
                 if is_win:
                     state.wins += 1
@@ -589,7 +582,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                         await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
                     else:
                         await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
-                    await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
+                    await broadcast_sticker(bot, STICKERS["WIN_BIG"] if res_type == "BIG" else STICKERS["WIN_SMALL"])
                     await broadcast_sticker(bot, STICKERS["WIN_ANY"])
                 else:
                     state.losses += 1
@@ -598,16 +591,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                     state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
                     await broadcast_sticker(bot, STICKERS["LOSS"])
 
-                await broadcast_message(
-                    bot,
-                    format_result(
-                        latest_issue,
-                        str(latest_data.get("number")),
-                        latest_type,
-                        pick,
-                        is_win
-                    )
-                )
+                await broadcast_message(bot, format_result(issue, res_num, res_type, pick, is_win))
 
                 # delete checking
                 for cid, mid in (state.active.checking_msg_ids or {}).items():
@@ -615,26 +599,30 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 
                 state.active = None
 
-                # graceful stop only after WIN (your style)
                 if state.graceful_stop_requested and is_win:
                     await stop_session(bot, reason="graceful_done")
                     break
 
-            # B) if API already passed our predicted issue -> clear stuck
-            elif int(latest_issue) > int(state.active.predicted_issue):
-                for cid, mid in (state.active.checking_msg_ids or {}).items():
-                    await safe_delete(bot, cid, mid)
-                state.active = None
+            else:
+                # if latest already passed predicted (API jumped), clear fast (no freeze)
+                if latest_issue:
+                    try:
+                        if int(latest_issue) > int(state.active.predicted_issue):
+                            for cid, mid in (state.active.checking_msg_ids or {}).items():
+                                await safe_delete(bot, cid, mid)
+                            state.active = None
+                    except Exception:
+                        pass
 
-        # C) TTL timeout so it never freezes
+        # TTL fallback (never stuck if API down)
         if state.active:
-            ttl = 75 if state.mode == "30S" else 130
+            ttl = 60 if state.mode == "30S" else 130
             if (time.time() - state.active.created_at) > ttl:
                 for cid, mid in (state.active.checking_msg_ids or {}).items():
                     await safe_delete(bot, cid, mid)
                 state.active = None
 
-        # 3) NEXT SIGNAL ISSUE (THE KEY FIX)
+        # 2) next_issue = latest_issue + 1 (API driven)
         next_issue = None
         if latest_issue:
             try:
@@ -642,7 +630,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
             except Exception:
                 next_issue = None
 
-        # Fallback only if API missing
+        # last resort fallback if API totally missing
         if not next_issue:
             date_str = now.strftime("%Y%m%d")
             if state.mode == "1M":
@@ -652,7 +640,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 total_30s_slots = (now.hour * 60 * 2) + (now.minute * 2) + (1 if s < 30 else 2)
                 next_issue = f"{date_str}30{total_30s_slots:04d}"
 
-        # 4) Generate Signal
+        # 3) Send new signal
         if (state.active is None) and is_safe_time:
             if state.last_signal_issue != next_issue:
 
@@ -683,12 +671,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                     except Exception:
                         pass
 
-                bet = ActiveBet(predicted_issue=next_issue, pick=pred)
-                bet.checking_msg_ids = checking_ids
-                for cid, mid in checking_ids.items():
-                    bet.loss_related_ids.setdefault(cid, []).append(mid)
-
-                state.active = bet
+                state.active = ActiveBet(predicted_issue=next_issue, pick=pred, checking_msg_ids=checking_ids)
                 state.last_signal_issue = next_issue
 
         await asyncio.sleep(0.5)
