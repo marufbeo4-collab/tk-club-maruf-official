@@ -27,7 +27,7 @@ from telegram.ext import (
 # =========================
 # IMPORTANT: Put your bot token in environment variable BOT_TOKEN
 # Example (Render/Heroku): BOT_TOKEN=123:ABC...
-BOT_TOKEN = os.environ.get("8456002611:AAHZUGRB6VEPGwimGwpusCXuUSMS7yL2XTY", "").strip()
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 
 # --- BRANDING & LINKS ---
 BRAND_NAME = "⚡ 𝐓𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐈𝐆𝐍𝐀𝐋 ⚡"
