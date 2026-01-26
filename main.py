@@ -25,41 +25,39 @@ from telegram.ext import (
 # =========================
 # CONFIG (ONLY TOKEN YOU SET)
 # =========================
-BOT_TOKEN = "8456002611:AAHZUGRB6VEPGwimGwpusCXuUSMS7yL2XTY"
+BOT_TOKEN = "8534138943:AAHvIRzDybgZz8Vu2AA935BSvDzsXT4TDR0" # <-- আপনার বটের টোকেন
 
-BRAND_NAME = "⚡ TK MARUF OFFICIAL 24/7 SIGNAL"
-CHANNEL_LINK = "https://t.me/big_maruf_official0"
+BRAND_NAME = "𝐋𝐄𝐀𝐃𝐄𝐑 𝐀𝐊𝐀𝐒𝐇 𝐕𝐈𝐏™"
+CHANNEL_LINK = "https://t.me/N_JCOMMUNITY"
 
 # Targets
 TARGETS = {
-    "MAIN_GROUP": -1003263928753,
-    "VIP": -1002892329434,
-    "PUBLIC": -1002629495753,
+    "MAIN_GROUP": -1003651634734,
 }
 
 # =========================
-# API CONFIG (TKCLUB2 - UPDATED)
+# API CONFIG (TKCLUB2)
 # =========================
 TKCLUB2_API_URL = "https://api880.inpay88.net/api/webapi/GetNoaverageEmerdList"
 
-# 👇 আপনার দেওয়া নতুন টোকেন এখানে বসানো হয়েছে 👇
+# 👇👇 নতুন টোকেন অবশ্যই এখানে বসাবেন 👇👇
 TKCLUB2_HEADERS = {
     "Content-Type": "application/json;charset=UTF-8",
     "Origin": "https://tkclub2.com",
     "Referer": "https://tkclub2.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzY5NDA1OTk1IiwibmJmIjoiMTc2OTQwNTk5NSIsImV4cCI6IjE3Njk0MDc3OTUiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiIxLzI2LzIwMjYgMTI6MDk6NTUgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIyMDI5NjAiLCJVc2VyTmFtZSI6Ijg4MDMyMTEzMjE2NzAiLCJVc2VyUGhvdG8iOiIxIiwiTmlja05hbWUiOiJNZW1iZXJOTkdMRVZRVyIsIkFtb3VudCI6IjMwNjAwLjAwIiwiSW50ZWdyYWwiOiIwIiwiTG9naW5NYXJrIjoiSDUiLCJMb2dpblRpbWUiOiIxLzI2LzIwMjYgMTE6Mzk6NTUgQU0iLCJMb2dpbklQQWRkcmVzcyI6IjEwMy4xNzEuMzYuMTI5IiwiRGJOdW1iZXIiOiIwIiwiSXN2YWxpZGF0b3IiOiIwIiwiS2V5Q29kZSI6IjUiLCJUb2tlblR5cGUiOiJBY2Nlc3NfVG9rZW4iLCJQaG9uZVR5cGUiOiIwIiwiVXNlclR5cGUiOiIxIiwiVXNlck5hbWUyIjoiIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.UWsaHyXj-fHVdt8kBg2AoBQkkm8He3iqSLrh8-PJfIU"
 }
 
-# UPDATED LINKS
+# Registration Links
 REG_LINK = "https://tkclub2.com/#/register?invitationCode=18753202056"
 OWNER_LINK = "https://t.me/OWNER_MARUF_TOP"
 
 # BD Time
 BD_TZ = timezone(timedelta(hours=6))
 
-# Password source A1
-PASSWORD_SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
+# Password
+PASSWORD_SHEET_ID = "1_x1JOZp3HOTf9x02qKB0Tm4wD6Ype9MgguH-ATD0QCk"
 PASSWORD_SHEET_GID = "0"
 PASSWORD_FALLBACK = "2222"
 
@@ -67,8 +65,8 @@ PASSWORD_FALLBACK = "2222"
 MAX_RECOVERY_STEPS = 8
 FAST_LOOP_30S = 0.85
 FAST_LOOP_1M = 1.65
-FETCH_TIMEOUT = 5.5
-FETCH_RETRY_SLEEP = 0.55
+FETCH_TIMEOUT = 8.0
+FETCH_RETRY_SLEEP = 1.0
 
 
 # =========================
@@ -155,7 +153,7 @@ async def get_live_password() -> str:
 
 
 # =========================
-# PREDICTION ENGINE
+# PREDICTION ENGINE (POWERFUL LOGIC FROM YOUR PROVIDED CODE)
 # =========================
 class PredictionEngine:
     def __init__(self):
@@ -170,6 +168,7 @@ class PredictionEngine:
         except Exception:
             return
 
+        # Duplicate check
         if (not self.raw_history) or (self.raw_history[0].get("issueNumber") != issue_data.get("issueNumber")):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
@@ -205,7 +204,7 @@ class PredictionEngine:
         if h[0] == h[1] and h[2] == h[3] and h[1] != h[2]:
             votes.append("SMALL" if h[0] == "BIG" else "BIG")
 
-        # 5. ZigZag Booster
+        # 5. ZigZag Booster (CRITICAL LOGIC)
         if h[0] != h[1]:
             zigzag_vote = "SMALL" if h[0] == "BIG" else "BIG"
             votes.append(zigzag_vote)
@@ -335,7 +334,11 @@ def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
                 if "issueNumber" not in item and "period" in item:
                     item["issueNumber"] = item["period"]
                 return item
-    except Exception:
+        else:
+            # For debugging
+            print(f"API FAIL: {r.status_code} - Likely Token Expired")
+    except Exception as e:
+        print(f"API ERROR: {e}")
         pass
     return None
 
@@ -442,8 +445,6 @@ def format_summary() -> str:
 # =========================
 def _chat_name(chat_id: int) -> str:
     if chat_id == TARGETS["MAIN_GROUP"]: return "MAIN GROUP"
-    if chat_id == TARGETS["VIP"]: return "VIP"
-    if chat_id == TARGETS["PUBLIC"]: return "PUBLIC"
     return str(chat_id)
 
 def panel_text() -> str:
@@ -480,7 +481,6 @@ def selector_markup() -> InlineKeyboardMarkup:
     
     rows = [
         [btn("MAIN GROUP", TARGETS["MAIN_GROUP"])],
-        [btn("VIP", TARGETS["VIP"]), btn("PUBLIC", TARGETS["PUBLIC"])],
         [InlineKeyboardButton("🎨 Color: ON" if state.color_mode else "🎨 Color: OFF", callback_data="TOGGLE_COLOR")],
         [InlineKeyboardButton("⚡ Start 30 SEC", callback_data="START:30S"), InlineKeyboardButton("⚡ Start 1 MIN", callback_data="START:1M")],
         [InlineKeyboardButton("🧠 Stop After Recover", callback_data="STOP:GRACEFUL"), InlineKeyboardButton("🛑 Stop Now", callback_data="STOP:FORCE")],
@@ -731,7 +731,7 @@ def main():
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("panel", cmd_panel))
     application.add_handler(CallbackQueryHandler(on_callback))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    application.add_handler(MessageHandler(filters.TEXT, handle_text))
     application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
