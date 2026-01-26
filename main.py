@@ -528,33 +528,13 @@ async def start_session(bot, mode: str):
 
 
 # =========================
-# ENGINE LOOP (UPDATED PERIOD LOGIC)
+# ENGINE LOOP (API FOLLOWER MODE - FIX FOR 30S)
 # =========================
-def calculate_current_period_code(mode: str) -> str:
-    # Logic from HTML (GX 30S / 1M)
-    now = datetime.now(BD_TZ)
-    h = now.hour
-    m = now.minute
-    s = now.second
-    
-    date_str = now.strftime("%Y%m%d")
-    
-    if mode == "30S":
-        total_minutes = h * 60 + m
-        # HTML logic: periodIndex = totalMinutes * 2 + (s >= 30 ? 2 : 1)
-        # Note: This calculates the RUNNING period. 
-        # For prediction, we need the NEXT period.
-        # But here, we return the CURRENT RUNNING one for time syncing.
-        idx = total_minutes * 2 + (2 if s >= 30 else 1)
-        return f"{date_str}30{idx:04d}"
-        
-    else: # 1M
-        total_minutes = h * 60 + m + 1
-        return f"{date_str}01{total_minutes:04d}"
-
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
-
+    # Stuck Protection Variables
+    last_processed_time = time.time()
+    
     while state.running and state.session_id == my_session:
         if state.stop_event.is_set(): break
 
@@ -566,125 +546,126 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
             latest_num_str = str(latest_data.get("number"))
             latest_type = "BIG" if int(latest_num_str) >= 5 else "SMALL"
             
-            # Update history for logic
+            # Update history
             state.engine.update_history(latest_data)
             
-            # CHECK RESULT
-            if state.active and state.active.predicted_issue == latest_issue:
-                # We have a result for our active bet!
-                pick = state.active.pick
-                is_win = (pick == latest_type)
-                
-                if is_win:
-                    state.wins += 1
-                    state.streak_win += 1
-                    state.streak_loss = 0
-                    state.max_win_streak = max(state.max_win_streak, state.streak_win)
-                else:
-                    state.losses += 1
-                    state.streak_loss += 1
-                    state.streak_win = 0
-                    state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
-
-                # Send Stickers
-                if is_win:
-                    await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
-                    if state.streak_win in STICKERS["SUPER_WIN"]:
-                        await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
+            # --- RESULT CHECKING BLOCK ---
+            if state.active:
+                # যদি বটের প্রেডিক্টেড পিরিয়ড আর API এর লেটেস্ট পিরিয়ড মিলে যায়
+                if state.active.predicted_issue == latest_issue:
+                    pick = state.active.pick
+                    is_win = (pick == latest_type)
+                    
+                    if is_win:
+                        state.wins += 1
+                        state.streak_win += 1
+                        state.streak_loss = 0
+                        state.max_win_streak = max(state.max_win_streak, state.streak_win)
                     else:
-                        await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
-                    await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
-                    await broadcast_sticker(bot, STICKERS["WIN_ANY"])
-                else:
-                    await broadcast_sticker(bot, STICKERS["LOSS"])
+                        state.losses += 1
+                        state.streak_loss += 1
+                        state.streak_win = 0
+                        state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
 
-                # Send Result Message
-                await broadcast_message(bot, format_result(latest_issue, latest_num_str, latest_type, pick, is_win))
+                    # Stickers
+                    if is_win:
+                        await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
+                        if state.streak_win in STICKERS["SUPER_WIN"]:
+                            await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
+                        else:
+                            await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
+                        await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
+                        await broadcast_sticker(bot, STICKERS["WIN_ANY"])
+                    else:
+                        await broadcast_sticker(bot, STICKERS["LOSS"])
 
-                # Delete checking messages
-                for cid, mid in (state.active.checking_msg_ids or {}).items():
-                    await safe_delete(bot, cid, mid)
-                
-                state.last_result_issue = latest_issue
-                
-                # Stop if Graceful requested
-                if state.graceful_stop_requested and is_win:
+                    # Send Result Message
+                    await broadcast_message(bot, format_result(latest_issue, latest_num_str, latest_type, pick, is_win))
+
+                    # Clean up
+                    for cid, mid in (state.active.checking_msg_ids or {}).items():
+                        await safe_delete(bot, cid, mid)
+                    
+                    state.last_result_issue = latest_issue
+                    state.active = None # বেট ক্লিয়ার করে দিলাম
+                    last_processed_time = time.time() # টাইম রিসেট
+
+                    if state.graceful_stop_requested and is_win:
+                        await stop_session(bot, reason="graceful_done")
+                        break
+
+                # --- STUCK PROTECTION / SKIP CHECK ---
+                # যদি দেখি API এর পিরিয়ড আমাদের প্রেডিকশনের চেয়ে বড় হয়ে গেছে (মানে আমরা মিস করেছি)
+                elif int(latest_issue) > int(state.active.predicted_issue):
+                    # মিস হয়ে গেছে, ফোর্স ক্লিয়ার করে পরেরটার জন্য রেডি হবো
+                    for cid, mid in (state.active.checking_msg_ids or {}).items():
+                        await safe_delete(bot, cid, mid)
                     state.active = None
-                    await stop_session(bot, reason="graceful_done")
+                    last_processed_time = time.time()
+
+        # 2. GENERATE NEXT SIGNAL (Follow the API)
+        # যদি কোন অ্যাক্টিভ বেট না থাকে, তাহলেই নতুন সিগন্যাল দিব
+        if (not state.active) and latest_data:
+            latest_issue_int = int(latest_data.get("issueNumber"))
+            
+            # Logic: Last Result + 1 = Next Period
+            next_issue_int = latest_issue_int + 1
+            next_issue = str(next_issue_int)
+
+            # Duplicate Check: যদি এই পিরিয়ডে অলরেডি সিগন্যাল দিয়ে থাকি
+            if state.last_signal_issue != next_issue:
+                
+                # Safety Stop
+                if state.streak_loss >= MAX_RECOVERY_STEPS:
+                    await broadcast_message(bot, "🧊 <b>SAFETY STOP: Max Recovery Reached</b>")
+                    await stop_session(bot, reason="max_steps")
                     break
 
-                state.active = None
-        
-        # 2. GENERATE NEXT SIGNAL
-        # Calculate what the NEXT period is based on time
-        # Note: We need to predict the one that hasn't closed yet.
-        now = datetime.now(BD_TZ)
-        date_str = now.strftime("%Y%m%d")
-        
-        if state.mode == "30S":
-            total_min = now.hour * 60 + now.minute
-            # If current seconds > 30, we are in part 2, next is next minute part 1
-            # But usually we predict the *upcoming* one.
-            # Logic: If now is 10:00:15, current is Part 1. Next is Part 2.
-            # If now is 10:00:45, current is Part 2. Next is 10:01 Part 1.
-            
-            current_part = 2 if now.second >= 30 else 1
-            current_idx = total_min * 2 + current_part
-            next_idx = current_idx + 1
-            next_issue = f"{date_str}30{next_idx:04d}"
-            
-        else: # 1M
-            # Current minute is X. Result for X comes at X+1:00.
-            # We predict for X+1.
-            total_min = now.hour * 60 + now.minute + 1
-            next_issue = f"{date_str}01{total_min:04d}"
+                # Prediction Generation
+                pred = state.engine.get_pattern_signal(state.streak_loss)
+                conf = state.engine.calc_confidence(state.streak_loss)
 
-        # If we don't have an active bet, and this is a new period
-        if (not state.active) and (state.last_signal_issue != next_issue):
-            
-            # Wait for the result of the previous one to appear first?
-            # Or just fire? Usually we fire if we are close to the start.
-            
-            # Safety check: Max recovery
-            if state.streak_loss >= MAX_RECOVERY_STEPS:
-                await broadcast_message(bot, "🧊 <b>SAFETY STOP: Max Recovery Reached</b>")
-                await stop_session(bot, reason="max_steps")
-                break
+                # Send Stickers
+                if state.mode == "30S":
+                    s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
+                else:
+                    s_stk = STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
+                
+                await broadcast_sticker(bot, s_stk)
+                if state.color_mode:
+                    await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
-            # Prediction
-            pred = state.engine.get_pattern_signal(state.streak_loss)
-            conf = state.engine.calc_confidence(state.streak_loss)
+                # Send Signal
+                await broadcast_message(bot, format_signal(next_issue, pred, conf))
 
-            # Stickers
-            if state.mode == "30S":
-                s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
-            else:
-                s_stk = STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
-            
-            await broadcast_sticker(bot, s_stk)
-            if state.color_mode:
-                await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
+                # Send Checking Message
+                checking_ids = {}
+                for cid in state.selected_targets:
+                    try:
+                        m = await bot.send_message(cid, format_checking(next_issue), parse_mode=ParseMode.HTML)
+                        checking_ids[cid] = m.message_id
+                    except: pass
 
-            # Send Signal
-            await broadcast_message(bot, format_signal(next_issue, pred, conf))
+                # Set Active State
+                bet = ActiveBet(predicted_issue=next_issue, pick=pred)
+                bet.checking_msg_ids = checking_ids
+                for cid, mid in checking_ids.items():
+                    bet.loss_related_ids.setdefault(cid, []).append(mid)
 
-            # Send Checking
-            checking_ids = {}
-            for cid in state.selected_targets:
-                try:
-                    m = await bot.send_message(cid, format_checking(next_issue), parse_mode=ParseMode.HTML)
-                    checking_ids[cid] = m.message_id
-                except: pass
+                state.active = bet
+                state.last_signal_issue = next_issue
+                last_processed_time = time.time()
 
-            bet = ActiveBet(predicted_issue=next_issue, pick=pred)
-            bet.checking_msg_ids = checking_ids
-            for cid, mid in checking_ids.items():
-                bet.loss_related_ids.setdefault(cid, []).append(mid)
+        # 3. FORCE TIMEOUT (যদি ৩০ সেকেন্ডের বেশি আটকে থাকে)
+        time_limit = 35 if state.mode == "30S" else 65
+        if state.active and (time.time() - last_processed_time > time_limit):
+            # অনেকক্ষণ আটকে আছে, ফোর্স রিসেট
+            state.active = None
+            last_processed_time = time.time()
 
-            state.active = bet
-            state.last_signal_issue = next_issue
-
-        await asyncio.sleep(2) # Check every 2 seconds
+        # 30S হলে ১ সেকেন্ড পরপর লুপ ঘুরবে, ১ মিনিট হলে ২ সেকেন্ড
+        sleep_time = 1.0 if state.mode == "30S" else 2.0
+        await asyncio.sleep(sleep_time)
 
 
 # =========================
