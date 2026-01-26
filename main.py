@@ -528,34 +528,38 @@ async def start_session(bot, mode: str):
 
 
 # =========================
-# ENGINE LOOP (API FOLLOWER MODE - FIX FOR 30S)
+# ENGINE LOOP (SPEED OPTIMIZED FOR 30S)
 # =========================
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
-    # Stuck Protection Variables
-    last_processed_time = time.time()
     
     while state.running and state.session_id == my_session:
         if state.stop_event.is_set(): break
 
-        # 1. Fetch Latest Closed Result from API
+        # --- TIME CHECK (Clock Sync) ---
+        now = datetime.now(BD_TZ)
+        s = now.second
+        # ৩০ সেকেন্ডের লুপে বর্তমান সেকেন্ড (0-29)
+        mod_s = s % 30
+        
+        # 1. FETCH API (সবসময় ডাটা আনবো)
         latest_data = await fetch_latest_issue(state.mode)
         
         if latest_data:
-            latest_issue = str(latest_data.get("issueNumber"))
-            latest_num_str = str(latest_data.get("number"))
-            latest_type = "BIG" if int(latest_num_str) >= 5 else "SMALL"
-            
-            # Update history
+            latest_issue = str(latest_data.get("issueNumber")) # যেটা সার্ভারে শেষ হয়েছে
+            latest_num = int(latest_data.get("number"))
+            latest_type = "BIG" if latest_num >= 5 else "SMALL"
+
             state.engine.update_history(latest_data)
-            
-            # --- RESULT CHECKING BLOCK ---
+
+            # --- RESULT CHECKING ---
             if state.active:
-                # যদি বটের প্রেডিক্টেড পিরিয়ড আর API এর লেটেস্ট পিরিয়ড মিলে যায়
+                # যদি আমাদের প্রেডিকশন এবং লেটেস্ট ইস্যু মিলে যায় (রেজাল্ট এসে গেছে)
                 if state.active.predicted_issue == latest_issue:
                     pick = state.active.pick
                     is_win = (pick == latest_type)
                     
+                    # Stats Update
                     if is_win:
                         state.wins += 1
                         state.streak_win += 1
@@ -579,53 +583,62 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                     else:
                         await broadcast_sticker(bot, STICKERS["LOSS"])
 
-                    # Send Result Message
-                    await broadcast_message(bot, format_result(latest_issue, latest_num_str, latest_type, pick, is_win))
+                    # Message
+                    await broadcast_message(bot, format_result(latest_issue, str(latest_num), latest_type, pick, is_win))
 
-                    # Clean up
+                    # Cleanup
                     for cid, mid in (state.active.checking_msg_ids or {}).items():
                         await safe_delete(bot, cid, mid)
                     
                     state.last_result_issue = latest_issue
-                    state.active = None # বেট ক্লিয়ার করে দিলাম
-                    last_processed_time = time.time() # টাইম রিসেট
+                    state.active = None # বেট ক্লিয়ার
 
                     if state.graceful_stop_requested and is_win:
                         await stop_session(bot, reason="graceful_done")
                         break
 
-                # --- STUCK PROTECTION / SKIP CHECK ---
-                # যদি দেখি API এর পিরিয়ড আমাদের প্রেডিকশনের চেয়ে বড় হয়ে গেছে (মানে আমরা মিস করেছি)
+                # --- LATE RESULT HANDLING ---
+                # যদি দেখি সার্ভারের ইস্যু আমাদের প্রেডিকশনের চেয়ে বড় হয়ে গেছে (আমরা মিস করেছি)
                 elif int(latest_issue) > int(state.active.predicted_issue):
-                    # মিস হয়ে গেছে, ফোর্স ক্লিয়ার করে পরেরটার জন্য রেডি হবো
+                    # রেজাল্ট মিস হয়েছে, তাই ফোর্স লস বা স্কিপ ধরে রিসেট
                     for cid, mid in (state.active.checking_msg_ids or {}).items():
                         await safe_delete(bot, cid, mid)
-                    state.active = None
-                    last_processed_time = time.time()
+                    state.active = None # ফোর্স ক্লিয়ার
 
-        # 2. GENERATE NEXT SIGNAL (Follow the API)
-        # যদি কোন অ্যাক্টিভ বেট না থাকে, তাহলেই নতুন সিগন্যাল দিব
-        if (not state.active) and latest_data:
-            latest_issue_int = int(latest_data.get("issueNumber"))
-            
-            # Logic: Last Result + 1 = Next Period
-            next_issue_int = latest_issue_int + 1
-            next_issue = str(next_issue_int)
+        # 2. NEXT SIGNAL GENERATION (Time Guarded)
+        # 30S এর জন্য: শুধুমাত্র 0-22 সেকেন্ডের মধ্যে সিগন্যাল দিব। 
+        # ২৩ সেকেন্ড পার হয়ে গেলে আর সিগন্যাল দিব না, কারণ সময় নেই।
+        
+        is_safe_time = True
+        if state.mode == "30S":
+            # যদি বর্তমান সেকেন্ড ২২ এর বেশি হয়, তাহলে রিস্ক নিব না
+            if mod_s > 22: 
+                is_safe_time = False
+        else:
+            # ১ মিনিটের জন্য ৫০ সেকেন্ড পর্যন্ত সেফ
+            if now.second > 50:
+                is_safe_time = False
 
-            # Duplicate Check: যদি এই পিরিয়ডে অলরেডি সিগন্যাল দিয়ে থাকি
-            if state.last_signal_issue != next_issue:
+        if (not state.active) and latest_data and is_safe_time:
+            # Next Issue Calculation
+            # API Issue: X. Next Prediction: X+1
+            target_issue_int = int(latest_data.get("issueNumber")) + 1
+            target_issue = str(target_issue_int)
+
+            # Duplicate Check
+            if state.last_signal_issue != target_issue:
                 
-                # Safety Stop
+                # Safety
                 if state.streak_loss >= MAX_RECOVERY_STEPS:
-                    await broadcast_message(bot, "🧊 <b>SAFETY STOP: Max Recovery Reached</b>")
+                    await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
                     await stop_session(bot, reason="max_steps")
                     break
 
-                # Prediction Generation
+                # Prediction
                 pred = state.engine.get_pattern_signal(state.streak_loss)
                 conf = state.engine.calc_confidence(state.streak_loss)
 
-                # Send Stickers
+                # Send
                 if state.mode == "30S":
                     s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
                 else:
@@ -635,37 +648,28 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 if state.color_mode:
                     await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
-                # Send Signal
-                await broadcast_message(bot, format_signal(next_issue, pred, conf))
+                await broadcast_message(bot, format_signal(target_issue, pred, conf))
 
-                # Send Checking Message
+                # Checking Msg
                 checking_ids = {}
                 for cid in state.selected_targets:
                     try:
-                        m = await bot.send_message(cid, format_checking(next_issue), parse_mode=ParseMode.HTML)
+                        m = await bot.send_message(cid, format_checking(target_issue), parse_mode=ParseMode.HTML)
                         checking_ids[cid] = m.message_id
                     except: pass
 
-                # Set Active State
-                bet = ActiveBet(predicted_issue=next_issue, pick=pred)
+                # Active Set
+                bet = ActiveBet(predicted_issue=target_issue, pick=pred)
                 bet.checking_msg_ids = checking_ids
                 for cid, mid in checking_ids.items():
                     bet.loss_related_ids.setdefault(cid, []).append(mid)
 
                 state.active = bet
-                state.last_signal_issue = next_issue
-                last_processed_time = time.time()
+                state.last_signal_issue = target_issue
 
-        # 3. FORCE TIMEOUT (যদি ৩০ সেকেন্ডের বেশি আটকে থাকে)
-        time_limit = 35 if state.mode == "30S" else 65
-        if state.active and (time.time() - last_processed_time > time_limit):
-            # অনেকক্ষণ আটকে আছে, ফোর্স রিসেট
-            state.active = None
-            last_processed_time = time.time()
-
-        # 30S হলে ১ সেকেন্ড পরপর লুপ ঘুরবে, ১ মিনিট হলে ২ সেকেন্ড
-        sleep_time = 1.0 if state.mode == "30S" else 2.0
-        await asyncio.sleep(sleep_time)
+        # ফাস্ট লুপ: 30S এর জন্য ০.৫ সেকেন্ড, 1M এর জন্য ১.৫ সেকেন্ড
+        sleep_t = 0.5 if state.mode == "30S" else 1.5
+        await asyncio.sleep(sleep_t)
 
 
 # =========================
