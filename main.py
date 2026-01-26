@@ -53,36 +53,30 @@ PASSWORD_FALLBACK = "2222"
 
 # Settings
 MAX_RECOVERY_STEPS = 8
-FETCH_TIMEOUT = 5.5
+FETCH_TIMEOUT = 6.0
 
 
 # =========================
 # STICKERS
 # =========================
 STICKERS = {
-    # Prediction (1M)
     "PRED_1M_BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     "PRED_1M_SMALL": "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
 
-    # Prediction (30S)
     "PRED_30S_BIG": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
     "PRED_30S_SMALL": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
 
-    # Start stickers
     "START_30S": "CAACAgUAAxkBAAEQUrNpdYvDXIBff9O8TCRlI3QYJgfGiAAC1RQAAjGFMVfjtqxbDWbuEzgE",
     "START_1M": "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE",
     "START_END_ALWAYS": "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE",
 
-    # Win stickers
     "WIN_BIG": "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     "WIN_SMALL": "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     "WIN_ALWAYS": "CAACAgUAAxkBAAEQUTZpdFC4094KaOEdiE3njwhAGVCuBAAC4hoAAt0EqVQXmdKVLGbGmzgE",
     "WIN_ANY": "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
 
-    # Loss sticker
     "LOSS": "CAACAgUAAxkBAAEQTytpcz9VQoHyZ5ClbKSqKCJbpqX6yQACahYAAl1wAAFUL9xOdyh8UL84BA",
 
-    # Random win pool
     "WIN_POOL": [
         "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
         "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
@@ -96,7 +90,6 @@ STICKERS = {
         "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE",
     ],
 
-    # Super win streak
     "SUPER_WIN": {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
@@ -109,7 +102,6 @@ STICKERS = {
         10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE",
     },
 
-    # Color stickers
     "COLOR_RED": "CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE",
     "COLOR_GREEN": "CAACAgUAAxkBAAEQUCppc4JDHWjTzBCFIOx2Hcjtz9UnnAACzRwAAnR3oVejA9DVGekyYTgE",
 }
@@ -161,7 +153,6 @@ class PredictionEngine:
     def __init__(self):
         self.history: List[str] = []
         self.raw_history: List[dict] = []
-        self.last_prediction: Optional[str] = None
 
     def update_history(self, issue_data: dict):
         try:
@@ -176,20 +167,18 @@ class PredictionEngine:
             self.history = self.history[:120]
             self.raw_history = self.raw_history[:120]
 
-    def get_pattern_signal(self, current_streak_loss: int):
+    def get_pattern_signal(self, current_streak_loss: int) -> str:
         if not self.raw_history:
             return random.choice(["BIG", "SMALL"])
 
         try:
             last_num = int(self.raw_history[0]["number"])
-            prediction = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
+            pred = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
 
             # Recovery override
             if current_streak_loss >= 2 and self.history:
-                prediction = self.history[0]
-
-            self.last_prediction = prediction
-            return prediction
+                pred = self.history[0]
+            return pred
         except Exception:
             return random.choice(["BIG", "SMALL"])
 
@@ -215,7 +204,6 @@ class ActiveBet:
     pick: str
     created_at: float = field(default_factory=lambda: time.time())
     checking_msg_ids: Dict[int, int] = field(default_factory=dict)
-    loss_related_ids: Dict[int, List[int]] = field(default_factory=dict)
 
 @dataclass
 class BotState:
@@ -245,13 +233,13 @@ state = BotState()
 
 
 # =========================
-# FETCH (POST) -> RETURN LIST (FIX)
+# FETCH LIST (pageSize 50)
 # =========================
 def _fetch_latest_list_sync(mode: str) -> List[dict]:
     type_id = 5 if mode == "30S" else 1
 
     payload = {
-        "pageSize": 10,
+        "pageSize": 50,  # ✅ FIX: bigger list for 30S jumps
         "pageNo": 1,
         "typeId": type_id,
         "language": 0,
@@ -521,19 +509,40 @@ async def start_session(bot, mode: str):
 
 
 # =========================
-# ENGINE LOOP (30S FIXED)
+# ENGINE LOOP (30S NEVER STUCK)
 # =========================
-def _parse_type(entry: dict) -> str:
+def _issue_num(x) -> Optional[int]:
+    try:
+        return int(str(x))
+    except Exception:
+        return None
+
+def _res_type(entry: dict) -> str:
     try:
         return "BIG" if int(entry.get("number", 0)) >= 5 else "SMALL"
     except Exception:
         return "SMALL"
 
-def _find_issue_in_list(lst: List[dict], issue: str) -> Optional[dict]:
+def _find_exact_or_next(lst: List[dict], predicted_issue: str) -> Optional[dict]:
+    p = _issue_num(predicted_issue)
+    if p is None:
+        return None
+
+    # exact
     for it in lst:
-        if str(it.get("issueNumber")) == str(issue):
+        if _issue_num(it.get("issueNumber")) == p:
             return it
-    return None
+
+    # closest next (>= predicted)
+    candidates = []
+    for it in lst:
+        n = _issue_num(it.get("issueNumber"))
+        if n is not None and n >= p:
+            candidates.append((n, it))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
 
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
@@ -549,25 +558,23 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
         if state.mode == "1M":
             is_safe_time = (s <= 50)
         else:
-            slot_second = s % 30
-            is_safe_time = (slot_second <= 20)
+            is_safe_time = ((s % 30) <= 20)
 
-        # Fetch list (latest closed + recent)
         lst = await fetch_latest_list(state.mode)
-
-        latest_issue = None
         latest_entry = lst[0] if lst else None
+        latest_issue = str(latest_entry.get("issueNumber")) if latest_entry else None
+
         if latest_entry:
-            latest_issue = str(latest_entry.get("issueNumber"))
             state.engine.update_history(latest_entry)
 
-        # 1) If active, try to resolve using LIST search (MAIN FIX)
+        # 1) resolve active bet (exact OR next)
         if state.active and lst:
-            hit = _find_issue_in_list(lst, state.active.predicted_issue)
+            hit = _find_exact_or_next(lst, state.active.predicted_issue)
             if hit:
                 issue = str(hit.get("issueNumber"))
                 res_num = str(hit.get("number"))
-                res_type = _parse_type(hit)
+                res_type = _res_type(hit)
+
                 pick = state.active.pick
                 is_win = (pick == res_type)
 
@@ -593,7 +600,6 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 
                 await broadcast_message(bot, format_result(issue, res_num, res_type, pick, is_win))
 
-                # delete checking
                 for cid, mid in (state.active.checking_msg_ids or {}).items():
                     await safe_delete(bot, cid, mid)
 
@@ -604,33 +610,31 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                     break
 
             else:
-                # if latest already passed predicted (API jumped), clear fast (no freeze)
+                # if latest passed far beyond predicted -> clear quickly
                 if latest_issue:
-                    try:
-                        if int(latest_issue) > int(state.active.predicted_issue):
-                            for cid, mid in (state.active.checking_msg_ids or {}).items():
-                                await safe_delete(bot, cid, mid)
-                            state.active = None
-                    except Exception:
-                        pass
+                    li = _issue_num(latest_issue)
+                    pi = _issue_num(state.active.predicted_issue)
+                    if li is not None and pi is not None and li > pi + 2:
+                        for cid, mid in (state.active.checking_msg_ids or {}).items():
+                            await safe_delete(bot, cid, mid)
+                        state.active = None
 
-        # TTL fallback (never stuck if API down)
+        # 2) TTL fallback (never freeze)
         if state.active:
-            ttl = 60 if state.mode == "30S" else 130
+            ttl = 55 if state.mode == "30S" else 130
             if (time.time() - state.active.created_at) > ttl:
                 for cid, mid in (state.active.checking_msg_ids or {}).items():
                     await safe_delete(bot, cid, mid)
                 state.active = None
 
-        # 2) next_issue = latest_issue + 1 (API driven)
+        # 3) next_issue (API-driven)
         next_issue = None
         if latest_issue:
-            try:
-                next_issue = str(int(latest_issue) + 1)
-            except Exception:
-                next_issue = None
+            li = _issue_num(latest_issue)
+            if li is not None:
+                next_issue = str(li + 1)
 
-        # last resort fallback if API totally missing
+        # absolute fallback if API missing
         if not next_issue:
             date_str = now.strftime("%Y%m%d")
             if state.mode == "1M":
@@ -640,7 +644,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 total_30s_slots = (now.hour * 60 * 2) + (now.minute * 2) + (1 if s < 30 else 2)
                 next_issue = f"{date_str}30{total_30s_slots:04d}"
 
-        # 3) Send new signal
+        # 4) send new signal
         if (state.active is None) and is_safe_time:
             if state.last_signal_issue != next_issue:
 
