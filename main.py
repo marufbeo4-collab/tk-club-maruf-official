@@ -23,41 +23,37 @@ from telegram.ext import (
 )
 
 # =========================
-# CONFIG (SET TOKEN IN ENV)
+# CONFIG
 # =========================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 
-# --- BRANDING & LINKS ---
 BRAND_NAME = "⚡ 𝐓𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐈𝐆𝐍𝐀𝐋 ⚡"
 REG_LINK = "https://tkclub2.com/#/register?invitationCode=18753202056"
 OWNER_USERNAME = "@OWNER_MARUF_TOP"
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
 
-# Targets
 TARGETS = {
     "MAIN_GROUP": -1003263928753,
     "VIP": -1002892329434,
     "PUBLIC": -1002629495753,
 }
 
-# API CONFIG
 API_URL = "https://api880.inpay88.net/api/webapi/GetNoaverageEmerdList"
-
-# BD Time
 BD_TZ = timezone(timedelta(hours=6))
 
-# Password source A1
 PASSWORD_SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
 PASSWORD_SHEET_GID = "0"
 PASSWORD_FALLBACK = "2222"
 
-# Settings
 MAX_RECOVERY_STEPS = 8
 FETCH_TIMEOUT = 6.0
+API_PAGE_SIZE = 60               # ✅ 30S এর জন্য বড় list
+PENDING_TTL_SECONDS_30S = 180    # ✅ 3 মিনিটে না পেলে auto-drop
+PENDING_TTL_SECONDS_1M = 360
 
 
 # =========================
-# STICKERS
+# STICKERS (same as yours)
 # =========================
 STICKERS = {
     "PRED_1M_BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
@@ -167,16 +163,13 @@ class PredictionEngine:
             self.history = self.history[:120]
             self.raw_history = self.raw_history[:120]
 
-    def get_pattern_signal(self, current_streak_loss: int) -> str:
+    def get_pattern_signal(self, streak_loss: int) -> str:
         if not self.raw_history:
             return random.choice(["BIG", "SMALL"])
-
         try:
             last_num = int(self.raw_history[0]["number"])
             pred = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
-
-            # Recovery override
-            if current_streak_loss >= 2 and self.history:
+            if streak_loss >= 2 and self.history:
                 pred = self.history[0]
             return pred
         except Exception:
@@ -199,8 +192,8 @@ def mode_label(mode: str) -> str:
     return "30 SEC" if mode == "30S" else "1 MIN"
 
 @dataclass
-class ActiveBet:
-    predicted_issue: str
+class PendingBet:
+    issue: str
     pick: str
     created_at: float = field(default_factory=lambda: time.time())
     checking_msg_ids: Dict[int, int] = field(default_factory=dict)
@@ -211,8 +204,6 @@ class BotState:
     mode: str = "30S"
     session_id: int = 0
     engine: PredictionEngine = field(default_factory=PredictionEngine)
-    active: Optional[ActiveBet] = None
-    last_signal_issue: Optional[str] = None
 
     wins: int = 0
     losses: int = 0
@@ -229,17 +220,21 @@ class BotState:
     graceful_stop_requested: bool = False
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
 
+    # ✅ IMPORTANT FIX
+    last_sent_issue_num: Optional[int] = None   # sequential period
+    last_signal_issue: Optional[str] = None
+    pending: Dict[str, PendingBet] = field(default_factory=dict)  # key=issue
+
 state = BotState()
 
 
 # =========================
-# FETCH LIST (pageSize 50)
+# FETCH LIST
 # =========================
-def _fetch_latest_list_sync(mode: str) -> List[dict]:
+def _fetch_list_sync(mode: str) -> List[dict]:
     type_id = 5 if mode == "30S" else 1
-
     payload = {
-        "pageSize": 50,  # ✅ FIX: bigger list for 30S jumps
+        "pageSize": API_PAGE_SIZE,
         "pageNo": 1,
         "typeId": type_id,
         "language": 0,
@@ -247,7 +242,6 @@ def _fetch_latest_list_sync(mode: str) -> List[dict]:
         "signature": "D39F9069695C55720235791E0D10D695",
         "timestamp": int(time.time())
     }
-
     headers = {
         "Content-Type": "application/json;charset=UTF-8",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
@@ -263,15 +257,14 @@ def _fetch_latest_list_sync(mode: str) -> List[dict]:
             return lst if isinstance(lst, list) else []
     except Exception:
         pass
-
     return []
 
-async def fetch_latest_list(mode: str) -> List[dict]:
-    return await asyncio.to_thread(_fetch_latest_list_sync, mode)
+async def fetch_list(mode: str) -> List[dict]:
+    return await asyncio.to_thread(_fetch_list_sync, mode)
 
 
 # =========================
-# MESSAGES
+# MESSAGE FORMATTERS
 # =========================
 def pretty_pick(pick: str) -> Tuple[str, str]:
     if pick == "BIG":
@@ -362,15 +355,12 @@ def format_summary() -> str:
 
 
 # =========================
-# PANEL
+# PANEL UI
 # =========================
 def _chat_name(chat_id: int) -> str:
-    if chat_id == TARGETS["MAIN_GROUP"]:
-        return "MAIN GROUP"
-    if chat_id == TARGETS["VIP"]:
-        return "VIP"
-    if chat_id == TARGETS["PUBLIC"]:
-        return "PUBLIC"
+    if chat_id == TARGETS["MAIN_GROUP"]: return "MAIN GROUP"
+    if chat_id == TARGETS["VIP"]: return "VIP"
+    if chat_id == TARGETS["PUBLIC"]: return "PUBLIC"
     return str(chat_id)
 
 def panel_text() -> str:
@@ -472,8 +462,9 @@ async def stop_session(bot, reason: str = "manual"):
     state.running = False
     state.stop_event.set()
 
-    if state.active:
-        for cid, mid in (state.active.checking_msg_ids or {}).items():
+    # delete all checking messages
+    for pb in list(state.pending.values()):
+        for cid, mid in pb.checking_msg_ids.items():
             await safe_delete(bot, cid, mid)
 
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
@@ -490,8 +481,10 @@ async def stop_session(bot, reason: str = "manual"):
             pass
 
     state.unlocked = False
-    state.active = None
     state.graceful_stop_requested = False
+    state.pending.clear()
+    state.last_sent_issue_num = None
+    state.last_signal_issue = None
 
 async def start_session(bot, mode: str):
     state.mode = mode
@@ -500,16 +493,18 @@ async def start_session(bot, mode: str):
     state.stop_event.clear()
     state.graceful_stop_requested = False
     state.engine = PredictionEngine()
-    state.active = None
-    state.last_signal_issue = None
     reset_stats()
+
+    state.pending.clear()
+    state.last_sent_issue_num = None
+    state.last_signal_issue = None
 
     stk = STICKERS["START_30S"] if mode == "30S" else STICKERS["START_1M"]
     await broadcast_sticker(bot, stk)
 
 
 # =========================
-# ENGINE LOOP (30S NEVER STUCK)
+# ENGINE LOOP (FINAL FIX)
 # =========================
 def _issue_num(x) -> Optional[int]:
     try:
@@ -523,27 +518,6 @@ def _res_type(entry: dict) -> str:
     except Exception:
         return "SMALL"
 
-def _find_exact_or_next(lst: List[dict], predicted_issue: str) -> Optional[dict]:
-    p = _issue_num(predicted_issue)
-    if p is None:
-        return None
-
-    # exact
-    for it in lst:
-        if _issue_num(it.get("issueNumber")) == p:
-            return it
-
-    # closest next (>= predicted)
-    candidates = []
-    for it in lst:
-        n = _issue_num(it.get("issueNumber"))
-        if n is not None and n >= p:
-            candidates.append((n, it))
-    if not candidates:
-        return None
-    candidates.sort(key=lambda x: x[0])
-    return candidates[0][1]
-
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
 
@@ -552,30 +526,42 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
             break
 
         now = datetime.now(BD_TZ)
-        s = now.second
+        sec = now.second
 
-        # safe time windows
+        # Safe window
         if state.mode == "1M":
-            is_safe_time = (s <= 50)
+            is_safe_time = (sec <= 50)
         else:
-            is_safe_time = ((s % 30) <= 20)
+            is_safe_time = ((sec % 30) <= 20)
 
-        lst = await fetch_latest_list(state.mode)
-        latest_entry = lst[0] if lst else None
-        latest_issue = str(latest_entry.get("issueNumber")) if latest_entry else None
+        lst = await fetch_list(state.mode)
 
-        if latest_entry:
-            state.engine.update_history(latest_entry)
+        # seed last_sent_issue_num from API (only once)
+        if state.last_sent_issue_num is None:
+            if lst:
+                li = _issue_num(lst[0].get("issueNumber"))
+                if li is not None:
+                    state.last_sent_issue_num = li
+            # if still none, just wait a bit
+            if state.last_sent_issue_num is None:
+                await asyncio.sleep(0.8)
+                continue
 
-        # 1) resolve active bet (exact OR next)
-        if state.active and lst:
-            hit = _find_exact_or_next(lst, state.active.predicted_issue)
+        # update history from latest
+        if lst:
+            state.engine.update_history(lst[0])
+
+        # build map for fast exact match
+        result_map = {str(it.get("issueNumber")): it for it in lst if it.get("issueNumber") is not None}
+
+        # 1) resolve pending EXACT only
+        resolved = []
+        for issue, pb in list(state.pending.items()):
+            hit = result_map.get(issue)
             if hit:
-                issue = str(hit.get("issueNumber"))
                 res_num = str(hit.get("number"))
                 res_type = _res_type(hit)
-
-                pick = state.active.pick
+                pick = pb.pick
                 is_win = (pick == res_type)
 
                 if is_win:
@@ -600,58 +586,38 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 
                 await broadcast_message(bot, format_result(issue, res_num, res_type, pick, is_win))
 
-                for cid, mid in (state.active.checking_msg_ids or {}).items():
+                for cid, mid in pb.checking_msg_ids.items():
                     await safe_delete(bot, cid, mid)
 
-                state.active = None
+                resolved.append(issue)
 
                 if state.graceful_stop_requested and is_win:
                     await stop_session(bot, reason="graceful_done")
-                    break
+                    return
 
-            else:
-                # if latest passed far beyond predicted -> clear quickly
-                if latest_issue:
-                    li = _issue_num(latest_issue)
-                    pi = _issue_num(state.active.predicted_issue)
-                    if li is not None and pi is not None and li > pi + 2:
-                        for cid, mid in (state.active.checking_msg_ids or {}).items():
-                            await safe_delete(bot, cid, mid)
-                        state.active = None
+        for issue in resolved:
+            state.pending.pop(issue, None)
 
-        # 2) TTL fallback (never freeze)
-        if state.active:
-            ttl = 55 if state.mode == "30S" else 130
-            if (time.time() - state.active.created_at) > ttl:
-                for cid, mid in (state.active.checking_msg_ids or {}).items():
+        # 2) TTL drop (no freeze)
+        ttl = PENDING_TTL_SECONDS_1M if state.mode == "1M" else PENDING_TTL_SECONDS_30S
+        for issue, pb in list(state.pending.items()):
+            if (time.time() - pb.created_at) > ttl:
+                for cid, mid in pb.checking_msg_ids.items():
                     await safe_delete(bot, cid, mid)
-                state.active = None
+                state.pending.pop(issue, None)
 
-        # 3) next_issue (API-driven)
-        next_issue = None
-        if latest_issue:
-            li = _issue_num(latest_issue)
-            if li is not None:
-                next_issue = str(li + 1)
+        # 3) send next signal sequentially (NO SKIP)
+        if is_safe_time:
+            next_issue_num = state.last_sent_issue_num + 1
+            next_issue = str(next_issue_num)
 
-        # absolute fallback if API missing
-        if not next_issue:
-            date_str = now.strftime("%Y%m%d")
-            if state.mode == "1M":
-                total_slots = (now.hour * 60) + now.minute + 1
-                next_issue = f"{date_str}01{total_slots:04d}"
-            else:
-                total_30s_slots = (now.hour * 60 * 2) + (now.minute * 2) + (1 if s < 30 else 2)
-                next_issue = f"{date_str}30{total_30s_slots:04d}"
-
-        # 4) send new signal
-        if (state.active is None) and is_safe_time:
-            if state.last_signal_issue != next_issue:
+            # prevent duplicate in same period
+            if state.last_signal_issue != next_issue and next_issue not in state.pending:
 
                 if state.streak_loss >= MAX_RECOVERY_STEPS:
                     await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
                     await stop_session(bot, reason="max_steps")
-                    break
+                    return
 
                 pred = state.engine.get_pattern_signal(state.streak_loss)
                 conf = state.engine.calc_confidence(state.streak_loss)
@@ -675,8 +641,9 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                     except Exception:
                         pass
 
-                state.active = ActiveBet(predicted_issue=next_issue, pick=pred, checking_msg_ids=checking_ids)
+                state.pending[next_issue] = PendingBet(issue=next_issue, pick=pred, checking_msg_ids=checking_ids)
                 state.last_signal_issue = next_issue
+                state.last_sent_issue_num = next_issue_num  # ✅ crucial: sequential
 
         await asyncio.sleep(0.5)
 
@@ -755,7 +722,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "STOP:GRACEFUL":
         if state.running:
             state.graceful_stop_requested = True
-            if state.streak_loss == 0 and state.active is None:
+            if state.streak_loss == 0 and not state.pending:
                 await stop_session(context.bot, reason="graceful_now")
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
