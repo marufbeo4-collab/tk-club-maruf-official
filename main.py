@@ -38,17 +38,17 @@ TARGETS = {
 }
 
 # =========================
-# API CONFIG (TKCLUB2)
+# API CONFIG (TKCLUB2 - UPDATED)
 # =========================
 TKCLUB2_API_URL = "https://api880.inpay88.net/api/webapi/GetNoaverageEmerdList"
 
+# 👇 আপনার দেওয়া নতুন টোকেন এখানে বসানো হয়েছে 👇
 TKCLUB2_HEADERS = {
     "Content-Type": "application/json;charset=UTF-8",
     "Origin": "https://tkclub2.com",
     "Referer": "https://tkclub2.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-    # Note: If this token expires, you must update it from the website's network tab.
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzY5MzUwODI3IiwibmJmIjoiMTc2OTM1MDgyNyIsImV4cCI6IjE3NjkzNTI2MjciLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiIxLzI1LzIwMjYgODo1MDoyNyBQTSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFjY2Vzc19Ub2tlbiIsIlVzZXJJZCI6IjIwMjk2MCIsIlVzZXJOYW1lIjoiODgwMzIxMTMyMTY3MCIsIlVzZXJQaG90byI6IjEiLCJOaWNrTmFtZSI6Ik1lbWJlck5OR0xFVlFXIiwiQW1vdW50IjoiMC4wMCIsIkludGVncmFsIjoiMCIsIkxvZ2luTWFyayI6Ikg1IiwiTG9naW5UaW1lIjoiMS8yNS8yMDI2IDg6MjA6MjcgUE0iLCJMb2dpbklQQWRkcmVzcyI6IjEwMy4xNzEuMzYuMTI5IiwiRGJOdW1iZXIiOiIwIiwiSXN2YWxpZGF0b3IiOiIwIiwiS2V5Q29kZSI6IjIiLCJUb2tlblR5cGUiOiJBY2Nlc3NfVG9rZW4iLCJQaG9uZVR5cGUiOiIwIiwiVXNlclR5cGUiOiIxIiwiVXNlck5hbWUyIjoiIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.EgcmEOjQ3bUnHLLyJwa8NBM0r6RP3kpmUwPvfIeCR_A",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzY5NDA1OTk1IiwibmJmIjoiMTc2OTQwNTk5NSIsImV4cCI6IjE3Njk0MDc3OTUiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiIxLzI2LzIwMjYgMTI6MDk6NTUgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIyMDI5NjAiLCJVc2VyTmFtZSI6Ijg4MDMyMTEzMjE2NzAiLCJVc2VyUGhvdG8iOiIxIiwiTmlja05hbWUiOiJNZW1iZXJOTkdMRVZRVyIsIkFtb3VudCI6IjMwNjAwLjAwIiwiSW50ZWdyYWwiOiIwIiwiTG9naW5NYXJrIjoiSDUiLCJMb2dpblRpbWUiOiIxLzI2LzIwMjYgMTE6Mzk6NTUgQU0iLCJMb2dpbklQQWRkcmVzcyI6IjEwMy4xNzEuMzYuMTI5IiwiRGJOdW1iZXIiOiIwIiwiSXN2YWxpZGF0b3IiOiIwIiwiS2V5Q29kZSI6IjUiLCJUb2tlblR5cGUiOiJBY2Nlc3NfVG9rZW4iLCJQaG9uZVR5cGUiOiIwIiwiVXNlclR5cGUiOiIxIiwiVXNlck5hbWUyIjoiIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.UWsaHyXj-fHVdt8kBg2AoBQkkm8He3iqSLrh8-PJfIU"
 }
 
 # UPDATED LINKS
@@ -155,7 +155,7 @@ async def get_live_password() -> str:
 
 
 # =========================
-# PREDICTION ENGINE (LOGIC COPIED FROM EXAMPLE)
+# PREDICTION ENGINE
 # =========================
 class PredictionEngine:
     def __init__(self):
@@ -170,7 +170,6 @@ class PredictionEngine:
         except Exception:
             return
 
-        # Check against last issue to prevent duplicate insertion
         if (not self.raw_history) or (self.raw_history[0].get("issueNumber") != issue_data.get("issueNumber")):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
@@ -251,7 +250,7 @@ class PredictionEngine:
         else:
             prediction = h[0]
 
-        # 9. Smart Override (ZigZag vs Dragon)
+        # 9. Smart Override
         if current_streak_loss >= 4:
             if h[0] != h[1]:
                 prediction = "SMALL" if h[0] == "BIG" else "BIG"
@@ -333,7 +332,6 @@ def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
             data = r.json()
             if data and "data" in data and "list" in data["data"]:
                 item = data["data"]["list"][0]
-                # Fix for differing key names (some APIs use period, some issueNumber)
                 if "issueNumber" not in item and "period" in item:
                     item["issueNumber"] = item["period"]
                 return item
