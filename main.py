@@ -25,7 +25,7 @@ from telegram.ext import (
 # =========================
 # CONFIG (REPLACE THESE)
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "456002611:AAHZUGRB6VEPGwimGwpusCXuUSMS7yL2XTY")  # ✅ paste here (or set Render env BOT_TOKEN)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8456002611:AAHZUGRB6VEPGwimGwpusCXuUSMS7yL2XTY")  # ✅ paste here (or set Render env BOT_TOKEN)
 
 BRAND_NAME = "⚡ TK MARUF OFFICIAL 24/7 SIGNAL"
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
