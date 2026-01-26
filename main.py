@@ -26,9 +26,12 @@ from telegram.ext import (
 # =========================
 # CONFIG (ONLY TOKEN YOU SET)
 # =========================
-BOT_TOKEN = "8456002611:AAHZUGRB6VEPGwimGwpusCXuUSMS7yL2XTY"  # <-- ONLY THIS YOU CHANGE
+BOT_TOKEN = "8456002611:AAHZUGRB6VEPGwimGwpusCXuUSMS7yL2XTY"
 
-BRAND_NAME = "⚡ DK MARUF OFFICIAL 24/7 SIGNAL"
+# --- BRANDING & LINKS ---
+BRAND_NAME = "⚡ 𝐓𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐈𝐆𝐍𝐀𝐋 ⚡"
+REG_LINK = "https://tkclub2.com/#/register?invitationCode=18753202056"
+OWNER_USERNAME = "@OWNER_MARUF_TOP"
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
 
 # Targets
@@ -38,7 +41,7 @@ TARGETS = {
     "PUBLIC": -1002629495753,
 }
 
-# NEW API CONFIG (From your HTML)
+# API CONFIG
 API_URL = "https://api880.inpay88.net/api/webapi/GetNoaverageEmerdList"
 
 # BD Time
@@ -296,7 +299,7 @@ async def fetch_latest_issue(mode: str) -> Optional[dict]:
 
 
 # =========================
-# MESSAGES
+# MESSAGES (UPDATED STYLES)
 # =========================
 def pretty_pick(pick: str) -> Tuple[str, str]:
     if pick == "BIG":
@@ -312,26 +315,26 @@ def format_signal(issue: str, pick: str, conf: int) -> str:
     pick_txt, _ = pretty_pick(pick)
     return (
         f"<b>{BRAND_NAME}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
         f"🧾 <b>Period:</b> <code>{issue}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 <b>PREDICTION</b> ➜ {pick_txt}\n"
-        f"📈 <b>Confidence</b> ➜ <b>{conf}%</b>\n"
+        f"🔥 <b>Confidence</b> ➜ <b>{conf}%</b>\n"
         f"🧠 <b>Recovery</b> ➜ <b>{recovery_label(state.streak_loss)}</b>\n"
         f"⏱ <b>BD Time</b> ➜ <b>{now_bd_str()}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔗 <b>JOIN</b> ➜ <a href='{CHANNEL_LINK}'>{CHANNEL_LINK}</a>"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 <b>REGISTER:</b> <a href='{REG_LINK}'>CLICK HERE</a>"
     )
 
 def format_checking(wait_issue: str) -> str:
     return (
-        f"🛰 <b>CHECKING RESULT</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🛰 <b>CHECKING RESULT...</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
         f"🧾 <b>Waiting:</b> <code>{wait_issue}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏳ syncing result from api..."
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏳ <i>Syncing result from server...</i>"
     )
 
 def format_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bool) -> str:
@@ -339,23 +342,32 @@ def format_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bo
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
     color_result = "GREEN" if res_type == "BIG" else "RED"
 
+    promo_text = ""
     if is_win:
         header = "✅ <b>WIN CONFIRMED</b> ✅"
         extra = f"\n🎨 <b>Color Win:</b> <b>{color_result}</b>" if state.color_mode else ""
+        # SPECIAL PROMO MESSAGE
+        promo_text = (
+            f"\n💎 <b>PREMIUM INFO</b> 💎\n"
+            f"🚀 <i>Aro top working file er jonno ekhane\n"
+            f"account khule amar inbox e knock din!</i>\n"
+            f"👤 <b>Owner:</b> {OWNER_USERNAME}"
+        )
     else:
         header = "❌ <b>LOSS CONFIRMED</b> ❌"
         extra = ""
 
     return (
         f"{header}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🧾 <b>Period:</b> <code>{issue}</code>\n"
         f"🎰 <b>Result:</b> {res_emoji} <b>{res_num} ({res_type})</b>\n"
         f"🎯 <b>Your Pick:</b> {pick_txt}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🧠 <b>Recovery:</b> <b>{recovery_label(state.streak_loss)}</b>\n"
         f"{extra}\n"
         f"📊 <b>W:</b> <b>{state.wins}</b> | <b>L:</b> <b>{state.losses}</b> | ⏱ <b>{now_bd_str()}</b>"
+        f"{promo_text}"
     ).strip()
 
 def format_summary() -> str:
@@ -363,18 +375,18 @@ def format_summary() -> str:
     wr = (state.wins / total * 100) if total else 0.0
     return (
         f"🛑 <b>SESSION CLOSED</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
         f"📦 <b>Total:</b> <b>{total}</b>\n"
         f"✅ <b>Win:</b> <b>{state.wins}</b>\n"
         f"❌ <b>Loss:</b> <b>{state.losses}</b>\n"
         f"🎯 <b>Win Rate:</b> <b>{wr:.1f}%</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🔥 <b>Max Win Streak:</b> <b>{state.max_win_streak}</b>\n"
         f"🧨 <b>Max Loss Streak:</b> <b>{state.max_loss_streak}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"⏱ <b>Closed:</b> <b>{now_bd_str()}</b>\n"
-        f"🔗 <b>REJOIN</b> ➜ <a href='{CHANNEL_LINK}'>{CHANNEL_LINK}</a>"
+        f"🔗 <b>JOIN VIP:</b> <a href='{CHANNEL_LINK}'>CLICK HERE</a>"
     )
 
 
@@ -398,21 +410,21 @@ def panel_text() -> str:
 
     return (
         "🔐 <b>CONTROL PANEL</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📡 <b>Status:</b> {running}\n"
         f"⚡ <b>Mode:</b> <b>{mode_label(state.mode)}</b>\n"
         f"{color}\n"
         f"{grace}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🎯 <b>Send Signals To</b>\n"
         f"{sel_lines}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         "📊 <b>Live Stats</b>\n"
         f"✅ Win: <b>{state.wins}</b>\n"
         f"❌ Loss: <b>{state.losses}</b>\n"
         f"🎯 WinRate: <b>{wr:.1f}%</b>\n"
         f"🔥 WinStreak: <b>{state.streak_win}</b> | 🧊 LossStreak: <b>{state.streak_loss}</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         "👇 <i>Select then Start</i>"
     )
 
@@ -528,7 +540,7 @@ async def start_session(bot, mode: str):
 
 
 # =========================
-# ENGINE LOOP (SPEED OPTIMIZED FOR 30S)
+# ENGINE LOOP (MATH FORCE MODE - SUPER FAST 30S)
 # =========================
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
@@ -536,43 +548,50 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     while state.running and state.session_id == my_session:
         if state.stop_event.is_set(): break
 
-        # --- TIME CHECK (Clock Sync) ---
+        # ১. বর্তমান সময় এবং পিরিয়ড ক্যালকুলেশন (API ছাড়াই)
         now = datetime.now(BD_TZ)
         s = now.second
-        # ৩০ সেকেন্ডের লুপে বর্তমান সেকেন্ড (0-29)
-        mod_s = s % 30
         
-        # 1. FETCH API (সবসময় ডাটা আনবো)
+        # পিরিয়ড লজিক (30S)
+        # দিন শুরু থেকে মোট কতগুলো ৩০ সেকেন্ডের স্লট গিয়েছে
+        total_30s_slots = (now.hour * 60 * 2) + (now.minute * 2) + (1 if s < 30 else 2)
+        date_str = now.strftime("%Y%m%d")
+        
+        # 1M এর জন্য আলাদা লজিক
+        if state.mode == "1M":
+            total_slots = (now.hour * 60) + now.minute + 1
+            current_running_period = f"{date_str}01{total_slots:04d}"
+            # 1M এর সেফ টাইম: ৫০ সেকেন্ড পর্যন্ত
+            is_safe_time = (s <= 50)
+        else:
+            # 30S
+            current_running_period = f"{date_str}30{total_30s_slots:04d}"
+            # 30S এর সেফ টাইম: স্লটের প্রথম ২০ সেকেন্ড (0-20 বা 30-50)
+            slot_second = s % 30
+            is_safe_time = (slot_second <= 20)
+
+        # ২. রেজাল্ট চেকিং (API থেকে)
+        # আমরা ব্যাকগ্রাউন্ডে ডাটা আনব, কিন্তু এটার জন্য সিগন্যাল আটকে থাকবে না
         latest_data = await fetch_latest_issue(state.mode)
         
         if latest_data:
-            latest_issue = str(latest_data.get("issueNumber")) # যেটা সার্ভারে শেষ হয়েছে
-            latest_num = int(latest_data.get("number"))
-            latest_type = "BIG" if latest_num >= 5 else "SMALL"
-
             state.engine.update_history(latest_data)
+            
+            latest_issue = str(latest_data.get("issueNumber"))
+            latest_type = "BIG" if int(latest_data.get("number")) >= 5 else "SMALL"
 
-            # --- RESULT CHECKING ---
             if state.active:
-                # যদি আমাদের প্রেডিকশন এবং লেটেস্ট ইস্যু মিলে যায় (রেজাল্ট এসে গেছে)
+                # যদি রেজাল্ট চলে আসে
                 if state.active.predicted_issue == latest_issue:
                     pick = state.active.pick
                     is_win = (pick == latest_type)
                     
-                    # Stats Update
                     if is_win:
                         state.wins += 1
                         state.streak_win += 1
                         state.streak_loss = 0
                         state.max_win_streak = max(state.max_win_streak, state.streak_win)
-                    else:
-                        state.losses += 1
-                        state.streak_loss += 1
-                        state.streak_win = 0
-                        state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
-
-                    # Stickers
-                    if is_win:
+                        
                         await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
                         if state.streak_win in STICKERS["SUPER_WIN"]:
                             await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
@@ -581,64 +600,50 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                         await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
                         await broadcast_sticker(bot, STICKERS["WIN_ANY"])
                     else:
+                        state.losses += 1
+                        state.streak_loss += 1
+                        state.streak_win = 0
+                        state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
                         await broadcast_sticker(bot, STICKERS["LOSS"])
 
-                    # Message
-                    await broadcast_message(bot, format_result(latest_issue, str(latest_num), latest_type, pick, is_win))
-
+                    await broadcast_message(bot, format_result(latest_issue, str(latest_data.get("number")), latest_type, pick, is_win))
+                    
                     # Cleanup
                     for cid, mid in (state.active.checking_msg_ids or {}).items():
                         await safe_delete(bot, cid, mid)
                     
-                    state.last_result_issue = latest_issue
-                    state.active = None # বেট ক্লিয়ার
+                    state.active = None # বেট ক্লিয়ার
 
                     if state.graceful_stop_requested and is_win:
                         await stop_session(bot, reason="graceful_done")
                         break
 
-                # --- LATE RESULT HANDLING ---
-                # যদি দেখি সার্ভারের ইস্যু আমাদের প্রেডিকশনের চেয়ে বড় হয়ে গেছে (আমরা মিস করেছি)
+                # **FORCE SKIP:** যদি দেখি আমাদের প্রেডিক্টেড পিরিয়ড পার হয়ে গেছে কিন্তু রেজাল্ট প্রসেস হয়নি
                 elif int(latest_issue) > int(state.active.predicted_issue):
-                    # রেজাল্ট মিস হয়েছে, তাই ফোর্স লস বা স্কিপ ধরে রিসেট
+                    # এর মানে আমরা রেজাল্ট মিস করেছি বা API লেট ছিল
                     for cid, mid in (state.active.checking_msg_ids or {}).items():
                         await safe_delete(bot, cid, mid)
-                    state.active = None # ফোর্স ক্লিয়ার
+                    state.active = None
 
-        # 2. NEXT SIGNAL GENERATION (Time Guarded)
-        # 30S এর জন্য: শুধুমাত্র 0-22 সেকেন্ডের মধ্যে সিগন্যাল দিব। 
-        # ২৩ সেকেন্ড পার হয়ে গেলে আর সিগন্যাল দিব না, কারণ সময় নেই।
+        # ৩. সিগন্যাল জেনারেশন (TIME FORCE)
+        # আমরা চেক করব: "এখন যে পিরিয়ড চলছে, সেটার জন্য কি সিগন্যাল দিয়েছি?"
+        # যদি না দিয়ে থাকি এবং সময় সেফ থাকে -> সিগন্যাল দাও।
         
-        is_safe_time = True
-        if state.mode == "30S":
-            # যদি বর্তমান সেকেন্ড ২২ এর বেশি হয়, তাহলে রিস্ক নিব না
-            if mod_s > 22: 
-                is_safe_time = False
-        else:
-            # ১ মিনিটের জন্য ৫০ সেকেন্ড পর্যন্ত সেফ
-            if now.second > 50:
-                is_safe_time = False
-
-        if (not state.active) and latest_data and is_safe_time:
-            # Next Issue Calculation
-            # API Issue: X. Next Prediction: X+1
-            target_issue_int = int(latest_data.get("issueNumber")) + 1
-            target_issue = str(target_issue_int)
-
-            # Duplicate Check
-            if state.last_signal_issue != target_issue:
+        if (not state.active) and is_safe_time:
+            # ডুপ্লিকেট চেক: এই পিরিয়ডে কি আগেই সিগন্যাল দিয়েছি?
+            if state.last_signal_issue != current_running_period:
                 
-                # Safety
+                # সেফটি চেক
                 if state.streak_loss >= MAX_RECOVERY_STEPS:
                     await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
                     await stop_session(bot, reason="max_steps")
                     break
 
-                # Prediction
+                # প্রেডিকশন (হিস্ট্রি না থাকলে র‍্যান্ডম দিবে, কিন্তু থামবে না)
                 pred = state.engine.get_pattern_signal(state.streak_loss)
                 conf = state.engine.calc_confidence(state.streak_loss)
 
-                # Send
+                # স্টিকার পাঠানো
                 if state.mode == "30S":
                     s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
                 else:
@@ -648,28 +653,28 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 if state.color_mode:
                     await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
-                await broadcast_message(bot, format_signal(target_issue, pred, conf))
+                # মেসেজ পাঠানো
+                await broadcast_message(bot, format_signal(current_running_period, pred, conf))
 
-                # Checking Msg
+                # চেকিং মেসেজ
                 checking_ids = {}
                 for cid in state.selected_targets:
                     try:
-                        m = await bot.send_message(cid, format_checking(target_issue), parse_mode=ParseMode.HTML)
+                        m = await bot.send_message(cid, format_checking(current_running_period), parse_mode=ParseMode.HTML)
                         checking_ids[cid] = m.message_id
                     except: pass
 
-                # Active Set
-                bet = ActiveBet(predicted_issue=target_issue, pick=pred)
+                # অ্যাক্টিভ বেট সেট করা
+                bet = ActiveBet(predicted_issue=current_running_period, pick=pred)
                 bet.checking_msg_ids = checking_ids
                 for cid, mid in checking_ids.items():
                     bet.loss_related_ids.setdefault(cid, []).append(mid)
 
                 state.active = bet
-                state.last_signal_issue = target_issue
+                state.last_signal_issue = current_running_period
 
-        # ফাস্ট লুপ: 30S এর জন্য ০.৫ সেকেন্ড, 1M এর জন্য ১.৫ সেকেন্ড
-        sleep_t = 0.5 if state.mode == "30S" else 1.5
-        await asyncio.sleep(sleep_t)
+        # 30S এর জন্য লুপ খুব দ্রুত ঘুরতে হবে
+        await asyncio.sleep(0.5)
 
 
 # =========================
