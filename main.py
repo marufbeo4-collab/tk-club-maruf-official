@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import time
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from threading import Thread
@@ -53,7 +54,7 @@ PASSWORD_FALLBACK = "2222"
 
 # Settings
 MAX_RECOVERY_STEPS = 8
-FETCH_TIMEOUT = 5.5
+FETCH_TIMEOUT = 6.5
 
 # =========================
 # STICKERS
@@ -80,25 +81,12 @@ STICKERS = {
         "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
         "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
         "CAACAgUAAxkBAAEQTx9pcz8GryuxGBMFtzRNRbiCTg9M8wAC5xYAAkN_QFWgd5zOh81JGDgE",
-        "CAACAgUAAxkBAAEQT_tpc4E3AxHmgW9VWKrzWjxlrvzSowACghkAAlbXcFWxdto6TqiBrzgE",
-        "CAACAgUAAxkBAAEQT_9pc4FHKn0W6ZfWOSaN6FUPzfmbnQACXR0AAqMbMFc-_4DHWbq7sjgE",
-        "CAACAgUAAxkBAAEQUAFpc4FIokHE09p165cCsWiUYV648wACuhQAAo3aMVeAsNW9VRuVvzgE",
-        "CAACAgUAAxkBAAEQUANpc4FJNTnfuBiLe-dVtoNCf3CQlAAC9xcAArE-MFfS5HNyds2tWTgE",
-        "CAACAgUAAxkBAAEQUAVpc4FKhJ_stZ3VRRzWUuJGaWbrAgACOhYAAst6OVehdeQEGZlXiDgE",
-        "CAACAgUAAxkBAAEQUAtpc4HcYxkscyRY2rhAAcmqMR29eAACOBYAAh7fwVU5Xy399k3oFDgE",
-        "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE",
     ],
 
     "SUPER_WIN": {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
         4: "CAACAgUAAxkBAAEQTiJpcmUgSydN-tKxoSVdFuAvCcJ3fQACvSEAApMRqFQoUYBnH5Pc7TgE",
-        5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE",
-        6: "CAACAgUAAxkBAAEQTiRpcmUhQJUjd2ukdtfEtBjwtMH4MAACWRgAAsTFqVTato0SmSN-6jgE",
-        7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
-        8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
-        9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
-        10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE",
     },
 
     "COLOR_RED": "CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE",
@@ -143,6 +131,54 @@ async def get_live_password() -> str:
     return await asyncio.to_thread(fetch_password_a1)
 
 # =========================
+# HELPERS
+# =========================
+def now_bd_str() -> str:
+    return datetime.now(BD_TZ).strftime("%H:%M:%S")
+
+def mode_label(mode: str) -> str:
+    return "30 SEC" if mode == "30S" else "1 MIN"
+
+def extract_issue_id(d: dict) -> Optional[str]:
+    for k in ("issueNumber", "issueNo", "issueId", "issue", "period"):
+        v = d.get(k)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return None
+
+def pill(text: str) -> str:
+    return f"➤ <b>{text}</b>"
+
+def pick_badge(pick: str) -> str:
+    return "🟢 <b>BIG</b> 🟢" if pick == "BIG" else "🔴 <b>SMALL</b> 🔴"
+
+def result_badge(res_type: str, number: int) -> str:
+    if res_type == "BIG":
+        return f"🟢 <b>{number}</b>  •  <b>BIG</b>"
+    return f"🔴 <b>{number}</b>  •  <b>SMALL</b>"
+
+# =========================
+# PERIOD
+# =========================
+def calc_period_and_remain(mode: str) -> Tuple[str, int]:
+    now = datetime.now(BD_TZ)
+    h, m, s = now.hour, now.minute, now.second
+
+    if mode == "30S":
+        remain = 30 - (s % 30)
+        date_str = now.strftime("%Y%m%d")
+        total_minutes = h * 60 + m
+        period_index = total_minutes * 2 + (2 if s >= 30 else 1)
+        period = f"{date_str}30{period_index:04d}"
+        return period, remain
+    else:
+        remain = 60 - s
+        date_str = now.strftime("%Y%m%d")
+        total_slots = (h * 60) + m + 1
+        period = f"{date_str}01{total_slots:04d}"
+        return period, remain
+
+# =========================
 # PREDICTION ENGINE
 # =========================
 class PredictionEngine:
@@ -170,12 +206,9 @@ class PredictionEngine:
     def get_pattern_signal(self, current_streak_loss: int):
         if not self.raw_history:
             return random.choice(["BIG", "SMALL"])
-
         try:
             last_num = int(self.raw_history[0]["number"])
             pred = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
-
-            # recovery: 2 loss হলে last result follow
             if current_streak_loss >= 2 and self.history:
                 pred = self.history[0]
             return pred
@@ -191,23 +224,11 @@ class PredictionEngine:
 # =========================
 # STATE
 # =========================
-def now_bd_str() -> str:
-    return datetime.now(BD_TZ).strftime("%H:%M:%S")
-
-def mode_label(mode: str) -> str:
-    return "30 SEC" if mode == "30S" else "1 MIN"
-
-def extract_issue_id(d: dict) -> Optional[str]:
-    for k in ("issueNumber", "issueNo", "issueId", "issue", "period"):
-        v = d.get(k)
-        if v is not None and str(v).strip():
-            return str(v).strip()
-    return None
-
 @dataclass
 class ActiveBet:
     predicted_issue: str
     pick: str
+    created_ts: float = field(default_factory=lambda: time.time())
     checking_msg_ids: Dict[int, int] = field(default_factory=dict)
 
 @dataclass
@@ -234,80 +255,10 @@ class BotState:
     graceful_stop_requested: bool = False
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
 
-    # API cache
     last_api_result: Optional[dict] = None
     last_api_fetch_ts: float = 0.0
 
 state = BotState()
-
-# =========================
-# API FETCH
-# =========================
-def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
-    type_id = 5 if mode == "30S" else 1
-    payload = {
-        "pageSize": 10,
-        "pageNo": 1,
-        "typeId": type_id,
-        "language": 0,
-        "random": "4ec1d2c67364426aa056214302636756",
-        "signature": "D39F9069695C55720235791E0D10D695",
-        "timestamp": int(time.time()),
-    }
-    headers = {
-        "Content-Type": "application/json;charset=UTF-8",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        "Origin": "https://dkwin9.com",
-        "Referer": "https://dkwin9.com/",
-    }
-
-    try:
-        r = requests.post(API_URL, json=payload, headers=headers, timeout=FETCH_TIMEOUT)
-        if r.status_code == 200:
-            data = r.json()
-            if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
-                return data["data"]["list"][0]
-    except Exception:
-        pass
-    return None
-
-async def fetch_latest_issue(mode: str) -> Optional[dict]:
-    return await asyncio.to_thread(_fetch_latest_issue_sync, mode)
-
-# =========================
-# PERIOD SYSTEM
-# =========================
-def calc_period_and_remain(mode: str) -> Tuple[str, int]:
-    now = datetime.now(BD_TZ)
-    h, m, s = now.hour, now.minute, now.second
-
-    if mode == "30S":
-        remain = 30 - (s % 30)
-        date_str = now.strftime("%Y%m%d")
-        total_minutes = h * 60 + m
-        period_index = total_minutes * 2 + (2 if s >= 30 else 1)
-        period = f"{date_str}30{period_index:04d}"
-        return period, remain
-    else:
-        remain = 60 - s
-        date_str = now.strftime("%Y%m%d")
-        total_slots = (h * 60) + m + 1
-        period = f"{date_str}01{total_slots:04d}"
-        return period, remain
-
-# =========================
-# PREMIUM MESSAGE STYLE
-# =========================
-def pill(text: str) -> str:
-    return f"➤ <b>{text}</b>"
-
-def pick_badge(pick: str) -> str:
-    return "🟢 <b>BIG</b> 🟢" if pick == "BIG" else "🔴 <b>SMALL</b> 🔴"
-
-def result_badge(res_type: str, number: int) -> str:
-    if res_type == "BIG":
-        return f"🟢 <b>{number}</b>  •  <b>BIG</b>"
-    return f"🔴 <b>{number}</b>  •  <b>SMALL</b>"
 
 def recovery_text() -> str:
     return f"{state.streak_loss} / {MAX_RECOVERY_STEPS}"
@@ -345,7 +296,6 @@ def format_checking(wait_issue: str) -> str:
 
 def format_result(issue: str, number: int, res_type: str, pick: str, is_win: bool) -> str:
     head = "✅ <b>WIN CONFIRMED</b> ✅" if is_win else "❌ <b>LOSS CONFIRMED</b> ❌"
-
     promo = ""
     if is_win:
         promo = (
@@ -379,70 +329,11 @@ def format_summary() -> str:
         f"{pill('LOSS')}  <b>{state.losses}</b>\n"
         f"{pill('WIN RATE')}  <b>{wr:.1f}%</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔥 {pill('MAX WIN STREAK')}  <b>{state.max_win_streak}</b>\n"
-        f"🧨 {pill('MAX LOSS STREAK')}  <b>{state.max_loss_streak}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🔗 <b>JOIN VIP:</b> <a href='{CHANNEL_LINK}'>CLICK HERE</a>"
     )
 
 # =========================
-# PANEL
-# =========================
-def _chat_name(chat_id: int) -> str:
-    if chat_id == TARGETS["MAIN_GROUP"]: return "MAIN GROUP"
-    if chat_id == TARGETS["VIP"]: return "VIP"
-    if chat_id == TARGETS["PUBLIC"]: return "PUBLIC"
-    return str(chat_id)
-
-def panel_text() -> str:
-    running = "🟢 RUNNING" if state.running else "🔴 STOPPED"
-    sel = state.selected_targets[:] if state.selected_targets else [TARGETS["MAIN_GROUP"]]
-    sel_lines = "\n".join([f"✅ <b>{_chat_name(cid)}</b> <code>{cid}</code>" for cid in sel])
-    total = state.wins + state.losses
-    wr = (state.wins / total * 100) if total else 0.0
-    color = "🎨 <b>COLOR:</b> <b>ON</b>" if state.color_mode else "🎨 <b>COLOR:</b> <b>OFF</b>"
-    grace = "🧠 <b>STOP AFTER RECOVER:</b> ✅" if state.graceful_stop_requested else "🧠 <b>STOP AFTER RECOVER:</b> ❌"
-
-    return (
-        "🔐 <b>CONTROL PANEL</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"📡 <b>Status:</b> {running}\n"
-        f"⚡ <b>Mode:</b> <b>{mode_label(state.mode)}</b>\n"
-        f"{color}\n"
-        f"{grace}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🎯 <b>Send Signals To</b>\n"
-        f"{sel_lines}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 <b>Live:</b> {stats_line()}\n"
-        f"🔥 <b>WinStreak:</b> {state.streak_win} | 🧊 <b>LossStreak:</b> {state.streak_loss}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "👇 <i>Select then Start</i>"
-    )
-
-def selector_markup() -> InlineKeyboardMarkup:
-    def btn(name: str, chat_id: int) -> InlineKeyboardButton:
-        on = "✅" if chat_id in state.selected_targets else "⬜"
-        return InlineKeyboardButton(f"{on} {name}", callback_data=f"TOGGLE:{chat_id}")
-
-    rows = [
-        [btn("MAIN GROUP", TARGETS["MAIN_GROUP"])],
-        [btn("VIP", TARGETS["VIP"]), btn("PUBLIC", TARGETS["PUBLIC"])],
-        [InlineKeyboardButton("🎨 Color: ON" if state.color_mode else "🎨 Color: OFF", callback_data="TOGGLE_COLOR")],
-        [
-            InlineKeyboardButton("⚡ Start 30 SEC", callback_data="START:30S"),
-            InlineKeyboardButton("⚡ Start 1 MIN", callback_data="START:1M"),
-        ],
-        [
-            InlineKeyboardButton("🧠 Stop After Recover", callback_data="STOP:GRACEFUL"),
-            InlineKeyboardButton("🛑 Stop Now", callback_data="STOP:FORCE"),
-        ],
-        [InlineKeyboardButton("🔄 Refresh Panel", callback_data="REFRESH_PANEL")]
-    ]
-    return InlineKeyboardMarkup(rows)
-
-# =========================
-# BOT HELPERS
+# CONCURRENT BROADCAST
 # =========================
 async def safe_delete(bot, chat_id: int, msg_id: int):
     try:
@@ -450,27 +341,73 @@ async def safe_delete(bot, chat_id: int, msg_id: int):
     except Exception:
         pass
 
-async def broadcast_sticker(bot, sticker_id: str):
+async def broadcast_sticker(bot, sticker_id: str) -> bool:
+    tasks = []
     for cid in state.selected_targets:
-        try:
-            await bot.send_sticker(cid, sticker_id)
-        except Exception:
-            pass
+        tasks.append(bot.send_sticker(cid, sticker_id))
+    if not tasks:
+        return False
+    res = await asyncio.gather(*tasks, return_exceptions=True)
+    ok = any(hasattr(r, "message_id") for r in res)
+    return ok
 
 async def broadcast_message(bot, text: str) -> Dict[int, int]:
-    out = {}
+    tasks = []
+    cids = []
     for cid in state.selected_targets:
-        try:
-            m = await bot.send_message(
-                cid,
-                text,
+        cids.append(cid)
+        tasks.append(
+            bot.send_message(
+                cid, text,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True
             )
-            out[cid] = m.message_id
-        except Exception:
-            pass
+        )
+    out: Dict[int, int] = {}
+    if tasks:
+        res = await asyncio.gather(*tasks, return_exceptions=True)
+        for cid, r in zip(cids, res):
+            if hasattr(r, "message_id"):
+                out[cid] = r.message_id
     return out
+
+# =========================
+# API FETCH
+# =========================
+def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
+    type_id = 5 if mode == "30S" else 1
+
+    payload = {
+        "pageSize": 10,
+        "pageNo": 1,
+        "typeId": type_id,
+        "language": 0,
+        # ✅ dynamic random like browser
+        "random": secrets.token_hex(16),
+        "signature": "D39F9069695C55720235791E0D10D695",
+        "timestamp": int(time.time()),
+    }
+
+    headers = {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Accept": "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Origin": "https://dkwin9.com",
+        "Referer": "https://dkwin9.com/",
+    }
+
+    try:
+        r = requests.post(API_URL, json=payload, headers=headers, timeout=FETCH_TIMEOUT)
+        if r.status_code == 200:
+            data = r.json()
+            if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
+                return data["data"]["list"][0]
+    except Exception:
+        pass
+    return None
+
+async def fetch_latest_issue(mode: str) -> Optional[dict]:
+    return await asyncio.to_thread(_fetch_latest_issue_sync, mode)
 
 # =========================
 # SESSION CONTROL
@@ -527,7 +464,7 @@ async def start_session(bot, mode: str):
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
 # =========================
-# RESULT PROCESS (NON-BLOCKING)
+# RESULT PROCESS (ROBUST)
 # =========================
 async def update_api_cache_and_process(bot, mode: str):
     latest_data = await fetch_latest_issue(mode)
@@ -549,47 +486,71 @@ async def update_api_cache_and_process(bot, mode: str):
     except Exception:
         return
 
-    if state.active and str(state.active.predicted_issue) == str(latest_issue):
-        pick = state.active.pick
-        is_win = (pick == latest_type)
+    if not state.active:
+        return
 
-        if is_win:
-            state.wins += 1
-            state.streak_win += 1
-            state.streak_loss = 0
-            state.max_win_streak = max(state.max_win_streak, state.streak_win)
+    # ✅ IMPORTANT: strict match only
+    if str(state.active.predicted_issue) != str(latest_issue):
+        # Debug: console log (deploy log)
+        # print(f"[NO MATCH] bet={state.active.predicted_issue} api={latest_issue} mode={mode}")
+        return
 
-            await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
-            if state.streak_win in STICKERS["SUPER_WIN"]:
-                await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
-            else:
-                await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
-            await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
-            await broadcast_sticker(bot, STICKERS["WIN_ANY"])
+    pick = state.active.pick
+    is_win = (pick == latest_type)
+
+    # --- send stickers (fallback safe) ---
+    if is_win:
+        state.wins += 1
+        state.streak_win += 1
+        state.streak_loss = 0
+        state.max_win_streak = max(state.max_win_streak, state.streak_win)
+
+        ok = await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
+        if state.streak_win in STICKERS["SUPER_WIN"]:
+            await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
         else:
-            state.losses += 1
-            state.streak_loss += 1
-            state.streak_win = 0
-            state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
-            await broadcast_sticker(bot, STICKERS["LOSS"])
+            await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
+        await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
+        await broadcast_sticker(bot, STICKERS["WIN_ANY"])
 
-        await broadcast_message(bot, format_result(latest_issue, number, latest_type, pick, is_win))
+        # ✅ if stickers blocked, still show text
+        if not ok:
+            await broadcast_message(bot, "✅ <b>WIN</b> (Sticker blocked in this chat)")
+    else:
+        state.losses += 1
+        state.streak_loss += 1
+        state.streak_win = 0
+        state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
 
-        for cid, mid in (state.active.checking_msg_ids or {}).items():
-            await safe_delete(bot, cid, mid)
+        ok = await broadcast_sticker(bot, STICKERS["LOSS"])
+        if not ok:
+            await broadcast_message(bot, "❌ <b>LOSS</b> (Sticker blocked in this chat)")
 
-        state.active = None
+    # ✅ result message always
+    await broadcast_message(bot, format_result(latest_issue, number, latest_type, pick, is_win))
 
-        if state.graceful_stop_requested and is_win:
-            await stop_session(bot, reason="graceful_done")
+    # cleanup checking
+    for cid, mid in (state.active.checking_msg_ids or {}).items():
+        await safe_delete(bot, cid, mid)
+
+    state.active = None
+
+    if state.graceful_stop_requested and is_win:
+        await stop_session(bot, reason="graceful_done")
 
 # =========================
-# ENGINE LOOP (PERIOD CHANGE SIGNAL + ANTI-STUCK)
+# ENGINE LOOP (FAST + POLL WHEN ACTIVE)
 # =========================
+def _issue_diff(a: str, b: str) -> Optional[int]:
+    try:
+        return int(a) - int(b)
+    except Exception:
+        return None
+
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
     last_signal_issue = None
-    last_fetch_key = None
+    last_fetch_ts = 0.0
 
     while state.running and state.session_id == my_session:
         if state.stop_event.is_set():
@@ -597,63 +558,129 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 
         period, remain = calc_period_and_remain(state.mode)
 
-        # ✅ anti-stuck: if active bet older than current period => skip
-        if state.active:
-            try:
-                if int(period) > int(state.active.predicted_issue):
-                    for cid, mid in (state.active.checking_msg_ids or {}).items():
-                        await safe_delete(bot, cid, mid)
-                    state.active = None
-            except Exception:
-                state.active = None
-
-        # ✅ Safety stop
+        # Safety stop
         if state.streak_loss >= MAX_RECOVERY_STEPS:
             await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
             await stop_session(bot, reason="max_steps")
             break
 
-        # ✅ schedule API fetch (strong for 30S)
+        # ✅ Keep bet longer (result can be late)
+        if state.active:
+            diff = _issue_diff(period, state.active.predicted_issue)
+            age = time.time() - state.active.created_ts
+            # clear only if missed by >=3 periods OR too old
+            if (diff is not None and diff >= 3) or age > 160:
+                for cid, mid in (state.active.checking_msg_ids or {}).items():
+                    await safe_delete(bot, cid, mid)
+                state.active = None
+
+        # ✅ API poll schedule
+        scheduled = False
         if state.mode == "30S":
-            do_fetch = (remain in (28, 12, 6, 3, 2))
+            scheduled = remain in (28, 16, 12, 8, 6, 4, 3, 2, 1)
         else:
-            do_fetch = (remain in (55, 20, 10))
+            scheduled = remain in (55, 30, 20, 12, 8, 5, 3, 2)
 
-        if do_fetch:
-            key = f"{period}:{remain}"
-            if key != last_fetch_key:
-                last_fetch_key = key
-                context.application.create_task(update_api_cache_and_process(bot, state.mode))
+        # ✅ If active bet exists, poll more often (critical for win/lose)
+        if state.active and (time.time() - last_fetch_ts) > 1.0:
+            scheduled = True
 
-        # ✅ SIGNAL: period change trigger (never miss)
-        if (not state.active) and (last_signal_issue != period):
+        if scheduled:
+            last_fetch_ts = time.time()
+            context.application.create_task(update_api_cache_and_process(bot, state.mode))
+
+        # ✅ Signal at very start to avoid delay
+        if state.mode == "30S":
+            signal_window = remain in (30, 29)
+        else:
+            signal_window = remain in (60, 59, 58)
+
+        if (not state.active) and signal_window and (last_signal_issue != period):
             pred = state.engine.get_pattern_signal(state.streak_loss)
             conf = state.engine.calc_confidence(state.streak_loss)
 
-            if state.mode == "30S":
-                s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
-            else:
-                s_stk = STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
+            s_stk = (
+                STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
+            ) if state.mode == "30S" else (
+                STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
+            )
 
             await broadcast_sticker(bot, s_stk)
-
             if state.color_mode:
                 await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
             await broadcast_message(bot, format_signal(period, pred, conf, remain))
 
-            checking_ids = {}
+            # checking messages
+            checking_ids: Dict[int, int] = {}
+            tasks = []
+            cids = []
             for cid in state.selected_targets:
-                try:
-                    m = await bot.send_message(cid, format_checking(period), parse_mode=ParseMode.HTML)
-                    checking_ids[cid] = m.message_id
-                except Exception:
-                    pass
+                cids.append(cid)
+                tasks.append(bot.send_message(cid, format_checking(period), parse_mode=ParseMode.HTML))
+            res = await asyncio.gather(*tasks, return_exceptions=True)
+            for cid, r in zip(cids, res):
+                if hasattr(r, "message_id"):
+                    checking_ids[cid] = r.message_id
 
             state.active = ActiveBet(predicted_issue=period, pick=pred, checking_msg_ids=checking_ids)
             last_signal_issue = period
 
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(0.12)
+
+# =========================
+# PANEL
+# =========================
+def _chat_name(chat_id: int) -> str:
+    if chat_id == TARGETS["MAIN_GROUP"]: return "MAIN GROUP"
+    if chat_id == TARGETS["VIP"]: return "VIP"
+    if chat_id == TARGETS["PUBLIC"]: return "PUBLIC"
+    return str(chat_id)
+
+def panel_text() -> str:
+    running = "🟢 RUNNING" if state.running else "🔴 STOPPED"
+    sel = state.selected_targets[:] if state.selected_targets else [TARGETS["MAIN_GROUP"]]
+    sel_lines = "\n".join([f"✅ <b>{_chat_name(cid)}</b> <code>{cid}</code>" for cid in sel])
+    color = "🎨 <b>COLOR:</b> <b>ON</b>" if state.color_mode else "🎨 <b>COLOR:</b> <b>OFF</b>"
+    grace = "🧠 <b>STOP AFTER RECOVER:</b> ✅" if state.graceful_stop_requested else "🧠 <b>STOP AFTER RECOVER:</b> ❌"
+
+    return (
+        "🔐 <b>CONTROL PANEL</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📡 <b>Status:</b> {running}\n"
+        f"⚡ <b>Mode:</b> <b>{mode_label(state.mode)}</b>\n"
+        f"{color}\n"
+        f"{grace}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🎯 <b>Send Signals To</b>\n"
+        f"{sel_lines}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>Live:</b> {stats_line()}\n"
+        f"🔥 <b>WinStreak:</b> {state.streak_win} | 🧊 <b>LossStreak:</b> {state.streak_loss}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👇 <i>Select then Start</i>"
+    )
+
+def selector_markup() -> InlineKeyboardMarkup:
+    def btn(name: str, chat_id: int) -> InlineKeyboardButton:
+        on = "✅" if chat_id in state.selected_targets else "⬜"
+        return InlineKeyboardButton(f"{on} {name}", callback_data=f"TOGGLE:{chat_id}")
+
+    rows = [
+        [btn("MAIN GROUP", TARGETS["MAIN_GROUP"])],
+        [btn("VIP", TARGETS["VIP"]), btn("PUBLIC", TARGETS["PUBLIC"])],
+        [InlineKeyboardButton("🎨 Color: ON" if state.color_mode else "🎨 Color: OFF", callback_data="TOGGLE_COLOR")],
+        [
+            InlineKeyboardButton("⚡ Start 30 SEC", callback_data="START:30S"),
+            InlineKeyboardButton("⚡ Start 1 MIN", callback_data="START:1M"),
+        ],
+        [
+            InlineKeyboardButton("🧠 Stop After Recover", callback_data="STOP:GRACEFUL"),
+            InlineKeyboardButton("🛑 Stop Now", callback_data="STOP:FORCE"),
+        ],
+        [InlineKeyboardButton("🔄 Refresh Panel", callback_data="REFRESH_PANEL")]
+    ]
+    return InlineKeyboardMarkup(rows)
 
 # =========================
 # COMMANDS & CALLBACKS
@@ -701,10 +728,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state.selected_targets.remove(cid)
         else:
             state.selected_targets.append(cid)
-
         if not state.selected_targets:
             state.selected_targets = [TARGETS["MAIN_GROUP"]]
-
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
 
@@ -731,7 +756,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "STOP:GRACEFUL":
         if state.running:
             state.graceful_stop_requested = True
-            # active না থাকলে এবং loss streak 0 হলে সাথে সাথে stop
             if state.streak_loss == 0 and state.active is None:
                 await stop_session(context.bot, reason="graceful_now")
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
