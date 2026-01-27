@@ -51,7 +51,6 @@ FETCH_TIMEOUT = 6.0
 # =========================
 # AUTO SCHEDULE (BD TIME)
 # =========================
-# ✅ আপনার চাওয়া টাইমগুলো (Start -> End)
 AUTO_WINDOWS = [
     ("21:00", "21:30"),
     ("23:00", "23:30"),
@@ -61,11 +60,14 @@ AUTO_WINDOWS = [
     ("19:00", "19:30"),
 ]
 
+
 def _hhmm_to_minutes(hhmm: str) -> int:
     h, m = hhmm.split(":")
     return int(h) * 60 + int(m)
 
+
 AUTO_WINDOWS_MIN = [(_hhmm_to_minutes(a), _hhmm_to_minutes(b)) for a, b in AUTO_WINDOWS]
+
 
 def is_now_in_any_window(now: datetime) -> bool:
     mins = now.hour * 60 + now.minute
@@ -73,6 +75,7 @@ def is_now_in_any_window(now: datetime) -> bool:
         if a <= mins < b:
             return True
     return False
+
 
 # =========================
 # STICKERS (OLD + NEW)
@@ -100,7 +103,7 @@ STICKERS = {
     "COLOR_RED_NEW": "CAACAgUAAxkBAAEQWcJpeJdKIJP8aovK9UrPBLXvWlvFLQACQxsAAiyRIFdg8_K_Uoi6qDgE",
     "COLOR_GREEN_NEW": "CAACAgUAAxkBAAEQWcFpeJdKf82jvSdW8pnpqOVBrBNvfwAC8hUAAojDIFc9fDJEqFMfRzgE",
 
-    # WIN/Loss
+    # WIN/Loss (Old kept)
     "WIN_BIG": "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     "WIN_SMALL": "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     "WIN_ALWAYS": "CAACAgUAAxkBAAEQUTZpdFC4094KaOEdiE3njwhAGVCuBAAC4hoAAt0EqVQXmdKVLGbGmzgE",
@@ -166,7 +169,7 @@ async def get_live_password() -> str:
     return await asyncio.to_thread(fetch_password_a1)
 
 # =========================
-# PREDICTION ENGINE (YOUR ZIGZAG SCAN LOGIC)
+# PREDICTION ENGINE (your zigzag scan)
 # =========================
 class PredictionEngine:
     def __init__(self):
@@ -196,8 +199,8 @@ class PredictionEngine:
             return random.choice(["BIG", "SMALL"])
 
         last_result = self.history[0]
-
         last_8 = self.history[:8]
+
         switches = 0
         for i in range(len(last_8) - 1):
             if last_8[i] != last_8[i + 1]:
@@ -256,13 +259,13 @@ class BotState:
 
     selected_targets: List[int] = field(default_factory=lambda: [TARGETS["MAIN_GROUP"]])
 
-    # ✅ Default: Color OFF (আপনার নির্দেশ)
+    # ✅ Default: Color OFF always (as you said)
     color_mode: bool = False
 
     # ✅ Auto schedule default ON
     auto_schedule_enabled: bool = True
 
-    # schedule started session marker
+    # Track schedule-started sessions
     started_by_schedule: bool = False
 
     graceful_stop_requested: bool = False
@@ -271,23 +274,23 @@ class BotState:
 state = BotState()
 
 # =========================
-# FETCH
+# FETCH (1 MIN ONLY, typeId=1)
 # =========================
 def _fetch_latest_issue_sync() -> Optional[dict]:
     payload = {
         "pageSize": 10,
         "pageNo": 1,
-        "typeId": 1,  # 1 MIN ONLY
+        "typeId": 1,
         "language": 0,
         "random": "4ec1d2c67364426aa056214302636756",
         "signature": "D39F9069695C55720235791E0D10D695",
-        "timestamp": int(time.time())
+        "timestamp": int(time.time()),
     }
     headers = {
         "Content-Type": "application/json;charset=UTF-8",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         "Origin": "https://dkwin9.com",
-        "Referer": "https://dkwin9.com/"
+        "Referer": "https://dkwin9.com/",
     }
     try:
         r = requests.post(API_URL, json=payload, headers=headers, timeout=FETCH_TIMEOUT)
@@ -296,18 +299,17 @@ def _fetch_latest_issue_sync() -> Optional[dict]:
             if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
                 return data["data"]["list"][0]
     except Exception as e:
-        print(f"API Error: {e}")
+        print("API Error:", e)
     return None
 
 async def fetch_latest_issue() -> Optional[dict]:
     return await asyncio.to_thread(_fetch_latest_issue_sync)
 
 # =========================
-# STICKER PICKER
+# STICKER PICKER (one set only)
 # =========================
 def choose_pred_stickers(pick: str) -> Tuple[str, Optional[str]]:
-    # ✅ one set only; sometimes new, mostly old
-    use_new = (random.random() < 0.35)
+    use_new = (random.random() < 0.35)  # sometimes new
     if use_new:
         pred = STICKERS["PRED_BIG_NEW"] if pick == "BIG" else STICKERS["PRED_SMALL_NEW"]
         color = STICKERS["COLOR_GREEN_NEW"] if pick == "BIG" else STICKERS["COLOR_RED_NEW"]
@@ -317,13 +319,12 @@ def choose_pred_stickers(pick: str) -> Tuple[str, Optional[str]]:
     return pred, color
 
 # =========================
-# PREMIUM MESSAGES (your format)
+# PREMIUM MESSAGES (your style)
 # =========================
 def pick_badge(pick: str) -> str:
     return "🟢 <b>BIG</b>" if pick == "BIG" else "🔴 <b>SMALL</b>"
 
 def color_badge_from_pick(pick: str) -> str:
-    # user instruction: if color selected -> show color prediction
     return "🟩 <b>GREEN</b>" if pick == "BIG" else "🟥 <b>RED</b>"
 
 def marketing_block() -> str:
@@ -334,7 +335,6 @@ def marketing_block() -> str:
     )
 
 def format_signal(issue: str, pick: str, conf: int) -> str:
-    # Entry line: BIG/SMALL | (if color_mode true -> add color badge)
     entry_line = f"🎯 <b>Entry:</b> {pick_badge(pick)}"
     if state.color_mode:
         entry_line += f"  |  {color_badge_from_pick(pick)}"
@@ -361,7 +361,6 @@ def format_checking(wait_issue: str) -> str:
 def format_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bool) -> str:
     head = "✅ <b>WIN CONFIRMED</b>" if is_win else "❌ <b>LOSS CONFIRMED</b>"
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
-
     return (
         f"{head}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -414,7 +413,7 @@ def panel_text() -> str:
 
     color = "🎨 <b>Color:</b> ON" if state.color_mode else "🎨 <b>Color:</b> OFF"
     auto = "⏰ <b>Auto Schedule:</b> ON" if state.auto_schedule_enabled else "⏰ <b>Auto Schedule:</b> OFF"
-    origin = "🧩 <b>Mode:</b> AUTO" if state.started_by_schedule and state.running else "🧩 <b>Mode:</b> MANUAL"
+    origin = "🧩 <b>Session:</b> AUTO" if (state.running and state.started_by_schedule) else "🧩 <b>Session:</b> MANUAL"
 
     windows = " | ".join([f"{a}-{b}" for a, b in AUTO_WINDOWS])
 
@@ -530,7 +529,7 @@ async def start_session(bot, started_by_schedule: bool):
     state.last_signal_issue = None
     state.started_by_schedule = started_by_schedule
 
-    # ✅ color default OFF সবসময় (আপনার নির্দেশ)
+    # ✅ always default color OFF when session starts
     state.color_mode = False
 
     reset_stats()
@@ -541,10 +540,10 @@ async def start_session(bot, started_by_schedule: bool):
         await broadcast_sticker(bot, s)
 
 # =========================
-# ENGINE LOOP (no mix)
+# ENGINE LOOP (FIXED: no "prediction then instant win" mix)
 # =========================
-async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
-    bot = context.bot
+async def engine_loop(app: Application, my_session: int):
+    bot = app.bot
 
     while state.running and state.session_id == my_session:
         if state.stop_event.is_set():
@@ -653,9 +652,10 @@ async def scheduler_loop(app: Application):
             if state.auto_schedule_enabled:
                 if in_window and (not state.running):
                     await start_session(app.bot, started_by_schedule=True)
-                    app.create_task(engine_loop(ContextTypes.DEFAULT_TYPE(application=app, bot=app.bot), state.session_id))
+                    app.create_task(engine_loop(app, state.session_id))
                 elif (not in_window) and state.running and state.started_by_schedule:
                     await stop_session(app.bot, reason="schedule_end")
+
         except Exception as e:
             print("Scheduler error:", e)
 
@@ -727,7 +727,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if state.running:
             await stop_session(context.bot, reason="restart_manual")
         await start_session(context.bot, started_by_schedule=False)
-        context.application.create_task(engine_loop(context, state.session_id))
+        context.application.create_task(engine_loop(context.application, state.session_id))
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
 
@@ -746,21 +746,30 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 # =========================
+# POST INIT (Render fix: start scheduler after event loop running)
+# =========================
+async def post_init(app: Application):
+    # ✅ This runs when the event loop is running
+    app.create_task(scheduler_loop(app))
+
+# =========================
 # MAIN
 # =========================
 def main():
     logging.basicConfig(level=logging.WARNING)
     keep_alive()
 
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)  # ✅ FIX for "no running event loop"
+        .build()
+    )
 
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("panel", cmd_panel))
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-    # ✅ Auto scheduler always running
-    application.create_task(scheduler_loop(application))
 
     application.run_polling(close_loop=False)
 
