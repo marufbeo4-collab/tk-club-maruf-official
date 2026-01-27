@@ -25,7 +25,7 @@ from telegram.ext import (
 # =========================
 # CONFIG (ONLY TOKEN YOU SET)
 # =========================
-BOT_TOKEN = "PUT_NEW_TOKEN_HERE"  # ✅ অবশ্যই নতুন টোকেন দিন
+BOT_TOKEN = "8456002611:AAFtqxTZ54FTUJNquuG85JDhMsZPYq3MM-U"  # ✅ অবশ্যই নতুন টোকেন দিন
 
 # --- BRANDING & LINKS ---
 BRAND_NAME = "⚡ 𝐓𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐈𝐆𝐍𝐀𝐋 ⚡"
