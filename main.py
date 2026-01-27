@@ -61,16 +61,21 @@ FETCH_TIMEOUT = 5.5
 STICKERS = {
     "PRED_1M_BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     "PRED_1M_SMALL": "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
+
     "PRED_30S_BIG": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
     "PRED_30S_SMALL": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
+
     "START_30S": "CAACAgUAAxkBAAEQUrNpdYvDXIBff9O8TCRlI3QYJgfGiAAC1RQAAjGFMVfjtqxbDWbuEzgE",
     "START_1M": "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE",
     "START_END_ALWAYS": "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE",
+
     "WIN_BIG": "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     "WIN_SMALL": "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     "WIN_ALWAYS": "CAACAgUAAxkBAAEQUTZpdFC4094KaOEdiE3njwhAGVCuBAAC4hoAAt0EqVQXmdKVLGbGmzgE",
     "WIN_ANY": "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
+
     "LOSS": "CAACAgUAAxkBAAEQTytpcz9VQoHyZ5ClbKSqKCJbpqX6yQACahYAAl1wAAFUL9xOdyh8UL84BA",
+
     "WIN_POOL": [
         "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
         "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
@@ -83,6 +88,7 @@ STICKERS = {
         "CAACAgUAAxkBAAEQUAtpc4HcYxkscyRY2rhAAcmqMR29eAACOBYAAh7fwVU5Xy399k3oFDgE",
         "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE",
     ],
+
     "SUPER_WIN": {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
@@ -94,6 +100,7 @@ STICKERS = {
         9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
         10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE",
     },
+
     "COLOR_RED": "CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE",
     "COLOR_GREEN": "CAACAgUAAxkBAAEQUCppc4JDHWjTzBCFIOx2Hcjtz9UnnAACzRwAAnR3oVejA9DVGekyYTgE",
 }
@@ -142,7 +149,6 @@ class PredictionEngine:
     def __init__(self):
         self.history: List[str] = []
         self.raw_history: List[dict] = []
-        self.last_prediction: Optional[str] = None
 
     def update_history(self, issue_data: dict):
         try:
@@ -151,7 +157,11 @@ class PredictionEngine:
         except Exception:
             return
 
-        if (not self.raw_history) or (str(self.raw_history[0].get("issueNumber")) != str(issue_data.get("issueNumber"))):
+        latest_issue = extract_issue_id(issue_data)
+        if not latest_issue:
+            return
+
+        if (not self.raw_history) or (extract_issue_id(self.raw_history[0]) != latest_issue):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
             self.history = self.history[:120]
@@ -163,14 +173,12 @@ class PredictionEngine:
 
         try:
             last_num = int(self.raw_history[0]["number"])
-            # HTML style reverse logic
-            prediction = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
+            pred = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
 
+            # recovery: 2 loss হলে last result follow
             if current_streak_loss >= 2 and self.history:
-                prediction = self.history[0]
-
-            self.last_prediction = prediction
-            return prediction
+                pred = self.history[0]
+            return pred
         except Exception:
             return random.choice(["BIG", "SMALL"])
 
@@ -178,10 +186,10 @@ class PredictionEngine:
         base = random.randint(88, 95)
         if streak_loss >= 1:
             base -= 5
-        return base
+        return max(50, min(99, base))
 
 # =========================
-# BOT STATE
+# STATE
 # =========================
 def now_bd_str() -> str:
     return datetime.now(BD_TZ).strftime("%H:%M:%S")
@@ -189,12 +197,18 @@ def now_bd_str() -> str:
 def mode_label(mode: str) -> str:
     return "30 SEC" if mode == "30S" else "1 MIN"
 
+def extract_issue_id(d: dict) -> Optional[str]:
+    for k in ("issueNumber", "issueNo", "issueId", "issue", "period"):
+        v = d.get(k)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return None
+
 @dataclass
 class ActiveBet:
     predicted_issue: str
     pick: str
     checking_msg_ids: Dict[int, int] = field(default_factory=dict)
-    loss_related_ids: Dict[int, List[int]] = field(default_factory=dict)
 
 @dataclass
 class BotState:
@@ -202,6 +216,7 @@ class BotState:
     mode: str = "30S"
     session_id: int = 0
     engine: PredictionEngine = field(default_factory=PredictionEngine)
+
     active: Optional[ActiveBet] = None
 
     wins: int = 0
@@ -219,18 +234,17 @@ class BotState:
     graceful_stop_requested: bool = False
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
 
-    # ✅ API cache (NEW)
+    # API cache
     last_api_result: Optional[dict] = None
     last_api_fetch_ts: float = 0.0
 
 state = BotState()
 
 # =========================
-# FETCH (POST)
+# API FETCH
 # =========================
 def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
     type_id = 5 if mode == "30S" else 1
-
     payload = {
         "pageSize": 10,
         "pageNo": 1,
@@ -240,7 +254,6 @@ def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
         "signature": "D39F9069695C55720235791E0D10D695",
         "timestamp": int(time.time()),
     }
-
     headers = {
         "Content-Type": "application/json;charset=UTF-8",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
@@ -262,92 +275,113 @@ async def fetch_latest_issue(mode: str) -> Optional[dict]:
     return await asyncio.to_thread(_fetch_latest_issue_sync, mode)
 
 # =========================
-# UI HELPERS
+# PERIOD SYSTEM
 # =========================
-def pretty_pick(pick: str) -> Tuple[str, str]:
-    if pick == "BIG":
-        return "🟢🟢 <b>BIG</b> 🟢🟢", "GREEN"
-    return "🔴🔴 <b>SMALL</b> 🔴🔴", "RED"
+def calc_period_and_remain(mode: str) -> Tuple[str, int]:
+    now = datetime.now(BD_TZ)
+    h, m, s = now.hour, now.minute, now.second
 
-def recovery_label(loss_streak: int) -> str:
-    if loss_streak <= 0:
-        return f"0 Step / {MAX_RECOVERY_STEPS}"
-    return f"{loss_streak} Step Loss / {MAX_RECOVERY_STEPS}"
+    if mode == "30S":
+        remain = 30 - (s % 30)
+        date_str = now.strftime("%Y%m%d")
+        total_minutes = h * 60 + m
+        period_index = total_minutes * 2 + (2 if s >= 30 else 1)
+        period = f"{date_str}30{period_index:04d}"
+        return period, remain
+    else:
+        remain = 60 - s
+        date_str = now.strftime("%Y%m%d")
+        total_slots = (h * 60) + m + 1
+        period = f"{date_str}01{total_slots:04d}"
+        return period, remain
 
-def format_signal(issue: str, pick: str, conf: int) -> str:
-    pick_txt, _ = pretty_pick(pick)
+# =========================
+# PREMIUM MESSAGE STYLE
+# =========================
+def pill(text: str) -> str:
+    return f"➤ <b>{text}</b>"
+
+def pick_badge(pick: str) -> str:
+    return "🟢 <b>BIG</b> 🟢" if pick == "BIG" else "🔴 <b>SMALL</b> 🔴"
+
+def result_badge(res_type: str, number: int) -> str:
+    if res_type == "BIG":
+        return f"🟢 <b>{number}</b>  •  <b>BIG</b>"
+    return f"🔴 <b>{number}</b>  •  <b>SMALL</b>"
+
+def recovery_text() -> str:
+    return f"{state.streak_loss} / {MAX_RECOVERY_STEPS}"
+
+def stats_line() -> str:
+    total = state.wins + state.losses
+    wr = (state.wins / total * 100) if total else 0.0
+    return f"✅ <b>{state.wins}</b>  |  ❌ <b>{state.losses}</b>  |  🎯 <b>{wr:.1f}%</b>"
+
+def format_signal(issue: str, pick: str, conf: int, remain: int) -> str:
     return (
-        f"<b>{BRAND_NAME}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
-        f"🧾 <b>Period:</b> <code>{issue}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 <b>PREDICTION</b> ➜ {pick_txt}\n"
-        f"🔥 <b>Confidence</b> ➜ <b>{conf}%</b>\n"
-        f"🧠 <b>Recovery</b> ➜ <b>{recovery_label(state.streak_loss)}</b>\n"
-        f"⏱ <b>BD Time</b> ➜ <b>{now_bd_str()}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ <b>{BRAND_NAME}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"{pill('MODE')}  <code>{mode_label(state.mode)}</code>\n"
+        f"{pill('PERIOD')}  <code>{issue}</code>\n"
+        f"{pill('TIMER')}  <b>{remain}s</b> left\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 {pill('PREDICTION')}  {pick_badge(pick)}\n"
+        f"🔥 {pill('CONFIDENCE')}  <b>{conf}%</b>\n"
+        f"🧠 {pill('RECOVERY')}  <b>{recovery_text()}</b>\n"
+        f"⏱ {pill('BD TIME')}  <b>{now_bd_str()}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🔗 <b>REGISTER:</b> <a href='{REG_LINK}'>CLICK HERE</a>"
     )
 
 def format_checking(wait_issue: str) -> str:
     return (
-        f"🛰 <b>CHECKING RESULT...</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
-        f"🧾 <b>Waiting:</b> <code>{wait_issue}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏳ <i>Syncing result from server...</i>"
+        f"🛰 <b>CHECKING RESULT…</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"{pill('WAITING')}  <code>{wait_issue}</code>\n"
+        f"{pill('MODE')}  <code>{mode_label(state.mode)}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏳ <i>Syncing result from server…</i>"
     )
 
-def format_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bool) -> str:
-    pick_txt, _ = pretty_pick(pick)
-    res_emoji = "🟢" if res_type == "BIG" else "🔴"
-    color_result = "GREEN" if res_type == "BIG" else "RED"
+def format_result(issue: str, number: int, res_type: str, pick: str, is_win: bool) -> str:
+    head = "✅ <b>WIN CONFIRMED</b> ✅" if is_win else "❌ <b>LOSS CONFIRMED</b> ❌"
 
-    promo_text = ""
+    promo = ""
     if is_win:
-        header = "✅ <b>WIN CONFIRMED</b> ✅"
-        extra = f"\n🎨 <b>Color Win:</b> <b>{color_result}</b>" if state.color_mode else ""
-        promo_text = (
-            f"\n💎 <b>PREMIUM INFO</b> 💎\n"
-            f"🚀 <i>Aro top working file er jonno ekhane\n"
-            f"account khule amar inbox e knock din!</i>\n"
+        promo = (
+            f"\n━━━━━━━━━━━━━━━━━━━━\n"
+            f"💎 <b>PREMIUM INFO</b>\n"
             f"👤 <b>Owner:</b> {OWNER_USERNAME}"
         )
-    else:
-        header = "❌ <b>LOSS CONFIRMED</b> ❌"
-        extra = ""
 
     return (
-        f"{header}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🧾 <b>Period:</b> <code>{issue}</code>\n"
-        f"🎰 <b>Result:</b> {res_emoji} <b>{res_num} ({res_type})</b>\n"
-        f"🎯 <b>Your Pick:</b> {pick_txt}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🧠 <b>Recovery:</b> <b>{recovery_label(state.streak_loss)}</b>\n"
-        f"{extra}\n"
-        f"📊 <b>W:</b> <b>{state.wins}</b> | <b>L:</b> <b>{state.losses}</b> | ⏱ <b>{now_bd_str()}</b>"
-        f"{promo_text}"
-    ).strip()
+        f"{head}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"{pill('PERIOD')}  <code>{issue}</code>\n"
+        f"{pill('RESULT')}  {result_badge(res_type, number)}\n"
+        f"{pill('YOUR PICK')}  {pick_badge(pick)}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🧠 {pill('RECOVERY')}  <b>{recovery_text()}</b>\n"
+        f"📊 {pill('STATS')}  {stats_line()}\n"
+        f"⏱ {pill('BD TIME')}  <b>{now_bd_str()}</b>"
+        f"{promo}"
+    )
 
 def format_summary() -> str:
     total = state.wins + state.losses
     wr = (state.wins / total * 100) if total else 0.0
     return (
         f"🛑 <b>SESSION CLOSED</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
-        f"📦 <b>Total:</b> <b>{total}</b>\n"
-        f"✅ <b>Win:</b> <b>{state.wins}</b>\n"
-        f"❌ <b>Loss:</b> <b>{state.losses}</b>\n"
-        f"🎯 <b>Win Rate:</b> <b>{wr:.1f}%</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔥 <b>Max Win Streak:</b> <b>{state.max_win_streak}</b>\n"
-        f"🧨 <b>Max Loss Streak:</b> <b>{state.max_loss_streak}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏱ <b>Closed:</b> <b>{now_bd_str()}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"{pill('MODE')}  <code>{mode_label(state.mode)}</code>\n"
+        f"{pill('TOTAL')}  <b>{total}</b>\n"
+        f"{pill('WIN')}  <b>{state.wins}</b>\n"
+        f"{pill('LOSS')}  <b>{state.losses}</b>\n"
+        f"{pill('WIN RATE')}  <b>{wr:.1f}%</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔥 {pill('MAX WIN STREAK')}  <b>{state.max_win_streak}</b>\n"
+        f"🧨 {pill('MAX LOSS STREAK')}  <b>{state.max_loss_streak}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🔗 <b>JOIN VIP:</b> <a href='{CHANNEL_LINK}'>CLICK HERE</a>"
     )
 
@@ -371,21 +405,18 @@ def panel_text() -> str:
 
     return (
         "🔐 <b>CONTROL PANEL</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         f"📡 <b>Status:</b> {running}\n"
         f"⚡ <b>Mode:</b> <b>{mode_label(state.mode)}</b>\n"
         f"{color}\n"
         f"{grace}\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "🎯 <b>Send Signals To</b>\n"
         f"{sel_lines}\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📊 <b>Live Stats</b>\n"
-        f"✅ Win: <b>{state.wins}</b>\n"
-        f"❌ Loss: <b>{state.losses}</b>\n"
-        f"🎯 WinRate: <b>{wr:.1f}%</b>\n"
-        f"🔥 WinStreak: <b>{state.streak_win}</b> | 🧊 LossStreak: <b>{state.streak_loss}</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>Live:</b> {stats_line()}\n"
+        f"🔥 <b>WinStreak:</b> {state.streak_win} | 🧊 <b>LossStreak:</b> {state.streak_loss}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "👇 <i>Select then Start</i>"
     )
 
@@ -460,9 +491,7 @@ async def stop_session(bot, reason: str = "manual"):
     if state.active:
         for cid, mid in (state.active.checking_msg_ids or {}).items():
             await safe_delete(bot, cid, mid)
-        for cid, mids in (state.active.loss_related_ids or {}).items():
-            for mid in mids:
-                await safe_delete(bot, cid, mid)
+        state.active = None
 
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
@@ -478,7 +507,6 @@ async def stop_session(bot, reason: str = "manual"):
             pass
 
     state.unlocked = False
-    state.active = None
     state.graceful_stop_requested = False
 
 async def start_session(bot, mode: str):
@@ -499,47 +527,29 @@ async def start_session(bot, mode: str):
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
 # =========================
-# ✅ PERIOD SYSTEM (HTML STYLE)
-# =========================
-def calc_period_and_remain(mode: str) -> Tuple[str, int]:
-    now = datetime.now(BD_TZ)
-    h, m, s = now.hour, now.minute, now.second
-
-    if mode == "30S":
-        remain = 30 - (s % 30)
-        date_str = now.strftime("%Y%m%d")
-        total_minutes = h * 60 + m
-        period_index = total_minutes * 2 + (2 if s >= 30 else 1)
-        period = f"{date_str}30{period_index:04d}"
-        return period, remain
-    else:
-        # 1M
-        remain = 60 - s
-        date_str = now.strftime("%Y%m%d")
-        total_slots = (h * 60) + m + 1
-        period = f"{date_str}01{total_slots:04d}"
-        return period, remain
-
-# =========================
-# ✅ API BACKGROUND UPDATE (NON-BLOCKING)
+# RESULT PROCESS (NON-BLOCKING)
 # =========================
 async def update_api_cache_and_process(bot, mode: str):
     latest_data = await fetch_latest_issue(mode)
     if not latest_data:
         return
 
-    # cache
     state.last_api_result = latest_data
     state.last_api_fetch_ts = time.time()
 
-    # history update
     state.engine.update_history(latest_data)
 
-    # result process (if have active bet)
-    latest_issue = str(latest_data.get("issueNumber"))
-    latest_type = "BIG" if int(latest_data.get("number")) >= 5 else "SMALL"
+    latest_issue = extract_issue_id(latest_data)
+    if not latest_issue:
+        return
 
-    if state.active and state.active.predicted_issue == latest_issue:
+    try:
+        number = int(latest_data.get("number"))
+        latest_type = "BIG" if number >= 5 else "SMALL"
+    except Exception:
+        return
+
+    if state.active and str(state.active.predicted_issue) == str(latest_issue):
         pick = state.active.pick
         is_win = (pick == latest_type)
 
@@ -563,9 +573,8 @@ async def update_api_cache_and_process(bot, mode: str):
             state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
             await broadcast_sticker(bot, STICKERS["LOSS"])
 
-        await broadcast_message(bot, format_result(latest_issue, str(latest_data.get("number")), latest_type, pick, is_win))
+        await broadcast_message(bot, format_result(latest_issue, number, latest_type, pick, is_win))
 
-        # cleanup checking
         for cid, mid in (state.active.checking_msg_ids or {}).items():
             await safe_delete(bot, cid, mid)
 
@@ -575,13 +584,12 @@ async def update_api_cache_and_process(bot, mode: str):
             await stop_session(bot, reason="graceful_done")
 
 # =========================
-# ✅ ENGINE LOOP (HTML STYLE SCHEDULE)
+# ENGINE LOOP (PERIOD CHANGE SIGNAL + ANTI-STUCK)
 # =========================
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
-
     last_signal_issue = None
-    last_fetch_key = None  # prevent same-second double fetch
+    last_fetch_key = None
 
     while state.running and state.session_id == my_session:
         if state.stop_event.is_set():
@@ -589,49 +597,51 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 
         period, remain = calc_period_and_remain(state.mode)
 
-        # ✅ 30S: API fetch only at remain==28 or 10 (like HTML)
-        # ✅ 1M: safer schedule at remain==55 or 20 (similar idea)
-        if state.mode == "30S":
-            do_fetch = (remain in (28, 10))
-        else:
-            do_fetch = (remain in (55, 20))
+        # ✅ anti-stuck: if active bet older than current period => skip
+        if state.active:
+            try:
+                if int(period) > int(state.active.predicted_issue):
+                    for cid, mid in (state.active.checking_msg_ids or {}).items():
+                        await safe_delete(bot, cid, mid)
+                    state.active = None
+            except Exception:
+                state.active = None
 
-        if do_fetch:
-            key = f"{period}:{remain}"
-            if key != last_fetch_key:
-                last_fetch_key = key
-                # non-blocking background
-                context.application.create_task(update_api_cache_and_process(bot, state.mode))
-
-        # ✅ SAFETY STOP
+        # ✅ Safety stop
         if state.streak_loss >= MAX_RECOVERY_STEPS:
             await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
             await stop_session(bot, reason="max_steps")
             break
 
-        # ✅ Prediction trigger (slot start)
-        # 30S: remain==30 means new slot start
-        # 1M: remain==60 means new minute start
-        start_trigger = (remain == 30) if state.mode == "30S" else (remain == 60)
+        # ✅ schedule API fetch (strong for 30S)
+        if state.mode == "30S":
+            do_fetch = (remain in (28, 12, 6, 3, 2))
+        else:
+            do_fetch = (remain in (55, 20, 10))
 
-        if (not state.active) and start_trigger and (last_signal_issue != period):
+        if do_fetch:
+            key = f"{period}:{remain}"
+            if key != last_fetch_key:
+                last_fetch_key = key
+                context.application.create_task(update_api_cache_and_process(bot, state.mode))
+
+        # ✅ SIGNAL: period change trigger (never miss)
+        if (not state.active) and (last_signal_issue != period):
             pred = state.engine.get_pattern_signal(state.streak_loss)
             conf = state.engine.calc_confidence(state.streak_loss)
 
-            # sticker
             if state.mode == "30S":
                 s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
             else:
                 s_stk = STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
 
             await broadcast_sticker(bot, s_stk)
+
             if state.color_mode:
                 await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
-            # message
-            await broadcast_message(bot, format_signal(period, pred, conf))
+            await broadcast_message(bot, format_signal(period, pred, conf, remain))
 
-            # checking msg
             checking_ids = {}
             for cid in state.selected_targets:
                 try:
@@ -640,15 +650,9 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 except Exception:
                     pass
 
-            bet = ActiveBet(predicted_issue=period, pick=pred)
-            bet.checking_msg_ids = checking_ids
-            for cid, mid in checking_ids.items():
-                bet.loss_related_ids.setdefault(cid, []).append(mid)
-
-            state.active = bet
+            state.active = ActiveBet(predicted_issue=period, pick=pred, checking_msg_ids=checking_ids)
             last_signal_issue = period
 
-        # ✅ fast loop, but no blocking API await
         await asyncio.sleep(0.25)
 
 # =========================
@@ -697,8 +701,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state.selected_targets.remove(cid)
         else:
             state.selected_targets.append(cid)
+
         if not state.selected_targets:
             state.selected_targets = [TARGETS["MAIN_GROUP"]]
+
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
 
@@ -725,6 +731,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "STOP:GRACEFUL":
         if state.running:
             state.graceful_stop_requested = True
+            # active না থাকলে এবং loss streak 0 হলে সাথে সাথে stop
             if state.streak_loss == 0 and state.active is None:
                 await stop_session(context.bot, reason="graceful_now")
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
