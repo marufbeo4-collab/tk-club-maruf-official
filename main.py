@@ -169,7 +169,7 @@ async def get_live_password() -> str:
     return await asyncio.to_thread(fetch_password_a1)
 
 # =========================
-# PREDICTION ENGINE (your zigzag scan)
+# PREDICTION ENGINE (ZIGZAG LOOP + COPY PASTE RESET)
 # =========================
 class PredictionEngine:
     def __init__(self):
@@ -191,36 +191,42 @@ class PredictionEngine:
             self.raw_history = self.raw_history[:120]
 
     def calc_confidence(self, streak_loss):
-        base = random.randint(90, 95)
-        return max(40, base - (streak_loss * 10))
+        base = random.randint(95, 99)
+        return max(60, base - (streak_loss * 5))
 
     def get_pattern_signal(self, current_streak_loss):
-        if len(self.history) < 12:
-            return random.choice(["BIG", "SMALL"])
+        # History Check
+        if len(self.history) < 3:
+            return self.history[0] if self.history else random.choice(["BIG", "SMALL"])
 
-        last_result = self.history[0]
-        last_8 = self.history[:8]
+        last = self.history[0]
+        prev1 = self.history[1]
+        prev2 = self.history[2]
 
-        switches = 0
-        for i in range(len(last_8) - 1):
-            if last_8[i] != last_8[i + 1]:
-                switches += 1
+        # =========================================================
+        # 🛡️ LOGIC 1: LOSS RESET (COPY PASTE / TREND MODE)
+        # =========================================================
+        # আপনার শর্ত: "Loss hoilei abr oi copy paste mod cholbe"
+        # অর্থাৎ লস হলে আমরা সোজা লাস্ট রেজাল্ট কপি করব।
+        if current_streak_loss > 0:
+            return last
 
-        is_zigzag_market = (switches >= 4)
+        # =========================================================
+        # ⚡ LOGIC 2: ZIGZAG MODE (WINNING STATE)
+        # =========================================================
+        # আপনার শর্ত: "Recent 3 ta zigzag khele zigzag mode e chole jabe"
+        # চেক: B S B বা S B S প্যাটার্ন আছে কিনা?
+        is_zigzag = (last != prev1 and prev1 != prev2)
+        
+        if is_zigzag:
+            # ZigZag Mode: উল্টা ধরব (Opposite)
+            return "SMALL" if last == "BIG" else "BIG"
 
-        if is_zigzag_market:
-            prediction = "SMALL" if last_result == "BIG" else "BIG"
-        else:
-            prediction = last_result
-
-        if current_streak_loss >= 2:
-            prediction = "SMALL" if prediction == "BIG" else "BIG"
-
-        if current_streak_loss >= 5:
-            prediction = last_result
-
-        self.last_prediction = prediction
-        return prediction
+        # =========================================================
+        # 🐢 LOGIC 3: DEFAULT (DOUBLE/DRAGON)
+        # =========================================================
+        # যদি জিগজ্যাগ না থাকে, তবে ডিফল্ট কপি পেস্ট (Trend)
+        return last
 
 # =========================
 # STATE
@@ -259,7 +265,7 @@ class BotState:
 
     selected_targets: List[int] = field(default_factory=lambda: [TARGETS["MAIN_GROUP"]])
 
-    # ✅ Default: Color OFF always (as you said)
+    # ✅ Default: Color OFF always
     color_mode: bool = False
 
     # ✅ Auto schedule default ON
