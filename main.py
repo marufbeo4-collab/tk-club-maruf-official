@@ -3,7 +3,6 @@ import logging
 import os
 import random
 import time
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from threading import Thread
@@ -55,35 +54,23 @@ PASSWORD_FALLBACK = "2222"
 # Settings
 MAX_RECOVERY_STEPS = 8
 FETCH_TIMEOUT = 5.5
-FETCH_RETRY_SLEEP = 1.0
 
 # =========================
 # STICKERS
 # =========================
 STICKERS = {
-    # Prediction (1M)
     "PRED_1M_BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     "PRED_1M_SMALL": "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
-
-    # Prediction (30S)
     "PRED_30S_BIG": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
     "PRED_30S_SMALL": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
-
-    # Start stickers
     "START_30S": "CAACAgUAAxkBAAEQUrNpdYvDXIBff9O8TCRlI3QYJgfGiAAC1RQAAjGFMVfjtqxbDWbuEzgE",
     "START_1M": "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE",
     "START_END_ALWAYS": "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE",
-
-    # Win stickers
     "WIN_BIG": "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     "WIN_SMALL": "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     "WIN_ALWAYS": "CAACAgUAAxkBAAEQUTZpdFC4094KaOEdiE3njwhAGVCuBAAC4hoAAt0EqVQXmdKVLGbGmzgE",
     "WIN_ANY": "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
-
-    # Loss sticker
     "LOSS": "CAACAgUAAxkBAAEQTytpcz9VQoHyZ5ClbKSqKCJbpqX6yQACahYAAl1wAAFUL9xOdyh8UL84BA",
-
-    # Random win pool
     "WIN_POOL": [
         "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
         "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
@@ -96,8 +83,6 @@ STICKERS = {
         "CAACAgUAAxkBAAEQUAtpc4HcYxkscyRY2rhAAcmqMR29eAACOBYAAh7fwVU5Xy399k3oFDgE",
         "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE",
     ],
-
-    # Super win streak
     "SUPER_WIN": {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
@@ -109,12 +94,9 @@ STICKERS = {
         9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
         10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE",
     },
-
-    # Color stickers
     "COLOR_RED": "CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE",
     "COLOR_GREEN": "CAACAgUAAxkBAAEQUCppc4JDHWjTzBCFIOx2Hcjtz9UnnAACzRwAAnR3oVejA9DVGekyYTgE",
 }
-
 
 # =========================
 # FLASK KEEP ALIVE
@@ -132,7 +114,6 @@ def run_http():
 def keep_alive():
     t = Thread(target=run_http, daemon=True)
     t.start()
-
 
 # =========================
 # PASSWORD
@@ -154,7 +135,6 @@ def fetch_password_a1() -> str:
 async def get_live_password() -> str:
     return await asyncio.to_thread(fetch_password_a1)
 
-
 # =========================
 # PREDICTION ENGINE
 # =========================
@@ -171,7 +151,6 @@ class PredictionEngine:
         except Exception:
             return
 
-        # Prevent duplicate adds
         if (not self.raw_history) or (str(self.raw_history[0].get("issueNumber")) != str(issue_data.get("issueNumber"))):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
@@ -179,29 +158,19 @@ class PredictionEngine:
             self.raw_history = self.raw_history[:120]
 
     def get_pattern_signal(self, current_streak_loss: int):
-        # Logic: Mimic the HTML "Fake" logic if history is short, or use Pattern if long
-        # The HTML logic used: (lastNumber + 1) % 2 == 0 ? BIG : SMALL (Reverse)
-        
         if not self.raw_history:
-             return random.choice(["BIG", "SMALL"])
+            return random.choice(["BIG", "SMALL"])
 
         try:
             last_num = int(self.raw_history[0]["number"])
-            # Reverse logic from HTML suggestion (Simple & Effective)
-            # If (Last + 1) is Even -> BIG, Else SMALL
-            if (last_num + 1) % 2 == 0:
-                prediction = "BIG"
-            else:
-                prediction = "SMALL"
-                
-            # Recovery Logic override
-            if current_streak_loss >= 2:
-                # If lost 2 times, stick to the last result (Dragon)
-                prediction = self.history[0] 
-                
+            # HTML style reverse logic
+            prediction = "BIG" if (last_num + 1) % 2 == 0 else "SMALL"
+
+            if current_streak_loss >= 2 and self.history:
+                prediction = self.history[0]
+
             self.last_prediction = prediction
             return prediction
-            
         except Exception:
             return random.choice(["BIG", "SMALL"])
 
@@ -210,7 +179,6 @@ class PredictionEngine:
         if streak_loss >= 1:
             base -= 5
         return base
-
 
 # =========================
 # BOT STATE
@@ -235,8 +203,6 @@ class BotState:
     session_id: int = 0
     engine: PredictionEngine = field(default_factory=PredictionEngine)
     active: Optional[ActiveBet] = None
-    last_result_issue: Optional[str] = None
-    last_signal_issue: Optional[str] = None
 
     wins: int = 0
     losses: int = 0
@@ -253,33 +219,33 @@ class BotState:
     graceful_stop_requested: bool = False
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
 
+    # ✅ API cache (NEW)
+    last_api_result: Optional[dict] = None
+    last_api_fetch_ts: float = 0.0
+
 state = BotState()
 
-
 # =========================
-# FETCH (UPDATED TO USE POST & HTML API)
+# FETCH (POST)
 # =========================
 def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
-    # Determine Type ID based on HTML code
-    # 30S = 5
-    # 1M = 1
     type_id = 5 if mode == "30S" else 1
-    
+
     payload = {
         "pageSize": 10,
         "pageNo": 1,
         "typeId": type_id,
         "language": 0,
         "random": "4ec1d2c67364426aa056214302636756",
-        "signature": "D39F9069695C55720235791E0D10D695", # From HTML
-        "timestamp": int(time.time())
+        "signature": "D39F9069695C55720235791E0D10D695",
+        "timestamp": int(time.time()),
     }
-    
+
     headers = {
         "Content-Type": "application/json;charset=UTF-8",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         "Origin": "https://dkwin9.com",
-        "Referer": "https://dkwin9.com/"
+        "Referer": "https://dkwin9.com/",
     }
 
     try:
@@ -287,19 +253,16 @@ def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
         if r.status_code == 200:
             data = r.json()
             if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
-                # Returns the latest CLOSED result
                 return data["data"]["list"][0]
-    except Exception as e:
-        print(f"API Error: {e}")
+    except Exception:
         pass
     return None
 
 async def fetch_latest_issue(mode: str) -> Optional[dict]:
     return await asyncio.to_thread(_fetch_latest_issue_sync, mode)
 
-
 # =========================
-# MESSAGES (UPDATED STYLES)
+# UI HELPERS
 # =========================
 def pretty_pick(pick: str) -> Tuple[str, str]:
     if pick == "BIG":
@@ -346,7 +309,6 @@ def format_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bo
     if is_win:
         header = "✅ <b>WIN CONFIRMED</b> ✅"
         extra = f"\n🎨 <b>Color Win:</b> <b>{color_result}</b>" if state.color_mode else ""
-        # SPECIAL PROMO MESSAGE
         promo_text = (
             f"\n💎 <b>PREMIUM INFO</b> 💎\n"
             f"🚀 <i>Aro top working file er jonno ekhane\n"
@@ -388,7 +350,6 @@ def format_summary() -> str:
         f"⏱ <b>Closed:</b> <b>{now_bd_str()}</b>\n"
         f"🔗 <b>JOIN VIP:</b> <a href='{CHANNEL_LINK}'>CLICK HERE</a>"
     )
-
 
 # =========================
 # PANEL
@@ -449,9 +410,8 @@ def selector_markup() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(rows)
 
-
 # =========================
-# HELPERS
+# BOT HELPERS
 # =========================
 async def safe_delete(bot, chat_id: int, msg_id: int):
     try:
@@ -480,7 +440,6 @@ async def broadcast_message(bot, text: str) -> Dict[int, int]:
         except Exception:
             pass
     return out
-
 
 # =========================
 # SESSION CONTROL
@@ -530,152 +489,167 @@ async def start_session(bot, mode: str):
     state.graceful_stop_requested = False
     state.engine = PredictionEngine()
     state.active = None
-    state.last_result_issue = None
-    state.last_signal_issue = None
     reset_stats()
+
+    state.last_api_result = None
+    state.last_api_fetch_ts = 0.0
 
     stk = STICKERS["START_30S"] if mode == "30S" else STICKERS["START_1M"]
     await broadcast_sticker(bot, stk)
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
+# =========================
+# ✅ PERIOD SYSTEM (HTML STYLE)
+# =========================
+def calc_period_and_remain(mode: str) -> Tuple[str, int]:
+    now = datetime.now(BD_TZ)
+    h, m, s = now.hour, now.minute, now.second
+
+    if mode == "30S":
+        remain = 30 - (s % 30)
+        date_str = now.strftime("%Y%m%d")
+        total_minutes = h * 60 + m
+        period_index = total_minutes * 2 + (2 if s >= 30 else 1)
+        period = f"{date_str}30{period_index:04d}"
+        return period, remain
+    else:
+        # 1M
+        remain = 60 - s
+        date_str = now.strftime("%Y%m%d")
+        total_slots = (h * 60) + m + 1
+        period = f"{date_str}01{total_slots:04d}"
+        return period, remain
 
 # =========================
-# ENGINE LOOP (MATH FORCE MODE - SUPER FAST 30S)
+# ✅ API BACKGROUND UPDATE (NON-BLOCKING)
+# =========================
+async def update_api_cache_and_process(bot, mode: str):
+    latest_data = await fetch_latest_issue(mode)
+    if not latest_data:
+        return
+
+    # cache
+    state.last_api_result = latest_data
+    state.last_api_fetch_ts = time.time()
+
+    # history update
+    state.engine.update_history(latest_data)
+
+    # result process (if have active bet)
+    latest_issue = str(latest_data.get("issueNumber"))
+    latest_type = "BIG" if int(latest_data.get("number")) >= 5 else "SMALL"
+
+    if state.active and state.active.predicted_issue == latest_issue:
+        pick = state.active.pick
+        is_win = (pick == latest_type)
+
+        if is_win:
+            state.wins += 1
+            state.streak_win += 1
+            state.streak_loss = 0
+            state.max_win_streak = max(state.max_win_streak, state.streak_win)
+
+            await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
+            if state.streak_win in STICKERS["SUPER_WIN"]:
+                await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
+            else:
+                await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
+            await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
+            await broadcast_sticker(bot, STICKERS["WIN_ANY"])
+        else:
+            state.losses += 1
+            state.streak_loss += 1
+            state.streak_win = 0
+            state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
+            await broadcast_sticker(bot, STICKERS["LOSS"])
+
+        await broadcast_message(bot, format_result(latest_issue, str(latest_data.get("number")), latest_type, pick, is_win))
+
+        # cleanup checking
+        for cid, mid in (state.active.checking_msg_ids or {}).items():
+            await safe_delete(bot, cid, mid)
+
+        state.active = None
+
+        if state.graceful_stop_requested and is_win:
+            await stop_session(bot, reason="graceful_done")
+
+# =========================
+# ✅ ENGINE LOOP (HTML STYLE SCHEDULE)
 # =========================
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
-    
+
+    last_signal_issue = None
+    last_fetch_key = None  # prevent same-second double fetch
+
     while state.running and state.session_id == my_session:
-        if state.stop_event.is_set(): break
+        if state.stop_event.is_set():
+            break
 
-        # ১. বর্তমান সময় এবং পিরিয়ড ক্যালকুলেশন (API ছাড়াই)
-        now = datetime.now(BD_TZ)
-        s = now.second
-        
-        # পিরিয়ড লজিক (30S)
-        # দিন শুরু থেকে মোট কতগুলো ৩০ সেকেন্ডের স্লট গিয়েছে
-        total_30s_slots = (now.hour * 60 * 2) + (now.minute * 2) + (1 if s < 30 else 2)
-        date_str = now.strftime("%Y%m%d")
-        
-        # 1M এর জন্য আলাদা লজিক
-        if state.mode == "1M":
-            total_slots = (now.hour * 60) + now.minute + 1
-            current_running_period = f"{date_str}01{total_slots:04d}"
-            # 1M এর সেফ টাইম: ৫০ সেকেন্ড পর্যন্ত
-            is_safe_time = (s <= 50)
+        period, remain = calc_period_and_remain(state.mode)
+
+        # ✅ 30S: API fetch only at remain==28 or 10 (like HTML)
+        # ✅ 1M: safer schedule at remain==55 or 20 (similar idea)
+        if state.mode == "30S":
+            do_fetch = (remain in (28, 10))
         else:
-            # 30S
-            current_running_period = f"{date_str}30{total_30s_slots:04d}"
-            # 30S এর সেফ টাইম: স্লটের প্রথম ২০ সেকেন্ড (0-20 বা 30-50)
-            slot_second = s % 30
-            is_safe_time = (slot_second <= 20)
+            do_fetch = (remain in (55, 20))
 
-        # ২. রেজাল্ট চেকিং (API থেকে)
-        # আমরা ব্যাকগ্রাউন্ডে ডাটা আনব, কিন্তু এটার জন্য সিগন্যাল আটকে থাকবে না
-        latest_data = await fetch_latest_issue(state.mode)
-        
-        if latest_data:
-            state.engine.update_history(latest_data)
-            
-            latest_issue = str(latest_data.get("issueNumber"))
-            latest_type = "BIG" if int(latest_data.get("number")) >= 5 else "SMALL"
+        if do_fetch:
+            key = f"{period}:{remain}"
+            if key != last_fetch_key:
+                last_fetch_key = key
+                # non-blocking background
+                context.application.create_task(update_api_cache_and_process(bot, state.mode))
 
-            if state.active:
-                # যদি রেজাল্ট চলে আসে
-                if state.active.predicted_issue == latest_issue:
-                    pick = state.active.pick
-                    is_win = (pick == latest_type)
-                    
-                    if is_win:
-                        state.wins += 1
-                        state.streak_win += 1
-                        state.streak_loss = 0
-                        state.max_win_streak = max(state.max_win_streak, state.streak_win)
-                        
-                        await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
-                        if state.streak_win in STICKERS["SUPER_WIN"]:
-                            await broadcast_sticker(bot, STICKERS["SUPER_WIN"][state.streak_win])
-                        else:
-                            await broadcast_sticker(bot, random.choice(STICKERS["WIN_POOL"]))
-                        await broadcast_sticker(bot, STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"])
-                        await broadcast_sticker(bot, STICKERS["WIN_ANY"])
-                    else:
-                        state.losses += 1
-                        state.streak_loss += 1
-                        state.streak_win = 0
-                        state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
-                        await broadcast_sticker(bot, STICKERS["LOSS"])
+        # ✅ SAFETY STOP
+        if state.streak_loss >= MAX_RECOVERY_STEPS:
+            await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
+            await stop_session(bot, reason="max_steps")
+            break
 
-                    await broadcast_message(bot, format_result(latest_issue, str(latest_data.get("number")), latest_type, pick, is_win))
-                    
-                    # Cleanup
-                    for cid, mid in (state.active.checking_msg_ids or {}).items():
-                        await safe_delete(bot, cid, mid)
-                    
-                    state.active = None # বেট ক্লিয়ার
+        # ✅ Prediction trigger (slot start)
+        # 30S: remain==30 means new slot start
+        # 1M: remain==60 means new minute start
+        start_trigger = (remain == 30) if state.mode == "30S" else (remain == 60)
 
-                    if state.graceful_stop_requested and is_win:
-                        await stop_session(bot, reason="graceful_done")
-                        break
+        if (not state.active) and start_trigger and (last_signal_issue != period):
+            pred = state.engine.get_pattern_signal(state.streak_loss)
+            conf = state.engine.calc_confidence(state.streak_loss)
 
-                # **FORCE SKIP:** যদি দেখি আমাদের প্রেডিক্টেড পিরিয়ড পার হয়ে গেছে কিন্তু রেজাল্ট প্রসেস হয়নি
-                elif int(latest_issue) > int(state.active.predicted_issue):
-                    # এর মানে আমরা রেজাল্ট মিস করেছি বা API লেট ছিল
-                    for cid, mid in (state.active.checking_msg_ids or {}).items():
-                        await safe_delete(bot, cid, mid)
-                    state.active = None
+            # sticker
+            if state.mode == "30S":
+                s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
+            else:
+                s_stk = STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
 
-        # ৩. সিগন্যাল জেনারেশন (TIME FORCE)
-        # আমরা চেক করব: "এখন যে পিরিয়ড চলছে, সেটার জন্য কি সিগন্যাল দিয়েছি?"
-        # যদি না দিয়ে থাকি এবং সময় সেফ থাকে -> সিগন্যাল দাও।
-        
-        if (not state.active) and is_safe_time:
-            # ডুপ্লিকেট চেক: এই পিরিয়ডে কি আগেই সিগন্যাল দিয়েছি?
-            if state.last_signal_issue != current_running_period:
-                
-                # সেফটি চেক
-                if state.streak_loss >= MAX_RECOVERY_STEPS:
-                    await broadcast_message(bot, "🧊 <b>SAFETY STOP</b>")
-                    await stop_session(bot, reason="max_steps")
-                    break
+            await broadcast_sticker(bot, s_stk)
+            if state.color_mode:
+                await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
-                # প্রেডিকশন (হিস্ট্রি না থাকলে র‍্যান্ডম দিবে, কিন্তু থামবে না)
-                pred = state.engine.get_pattern_signal(state.streak_loss)
-                conf = state.engine.calc_confidence(state.streak_loss)
+            # message
+            await broadcast_message(bot, format_signal(period, pred, conf))
 
-                # স্টিকার পাঠানো
-                if state.mode == "30S":
-                    s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
-                else:
-                    s_stk = STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
-                
-                await broadcast_sticker(bot, s_stk)
-                if state.color_mode:
-                    await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
+            # checking msg
+            checking_ids = {}
+            for cid in state.selected_targets:
+                try:
+                    m = await bot.send_message(cid, format_checking(period), parse_mode=ParseMode.HTML)
+                    checking_ids[cid] = m.message_id
+                except Exception:
+                    pass
 
-                # মেসেজ পাঠানো
-                await broadcast_message(bot, format_signal(current_running_period, pred, conf))
+            bet = ActiveBet(predicted_issue=period, pick=pred)
+            bet.checking_msg_ids = checking_ids
+            for cid, mid in checking_ids.items():
+                bet.loss_related_ids.setdefault(cid, []).append(mid)
 
-                # চেকিং মেসেজ
-                checking_ids = {}
-                for cid in state.selected_targets:
-                    try:
-                        m = await bot.send_message(cid, format_checking(current_running_period), parse_mode=ParseMode.HTML)
-                        checking_ids[cid] = m.message_id
-                    except: pass
+            state.active = bet
+            last_signal_issue = period
 
-                # অ্যাক্টিভ বেট সেট করা
-                bet = ActiveBet(predicted_issue=current_running_period, pick=pred)
-                bet.checking_msg_ids = checking_ids
-                for cid, mid in checking_ids.items():
-                    bet.loss_related_ids.setdefault(cid, []).append(mid)
-
-                state.active = bet
-                state.last_signal_issue = current_running_period
-
-        # 30S এর জন্য লুপ খুব দ্রুত ঘুরতে হবে
-        await asyncio.sleep(0.5)
-
+        # ✅ fast loop, but no blocking API await
+        await asyncio.sleep(0.25)
 
 # =========================
 # COMMANDS & CALLBACKS
@@ -719,9 +693,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("TOGGLE:"):
         cid = int(data.split(":")[1])
-        if cid in state.selected_targets: state.selected_targets.remove(cid)
-        else: state.selected_targets.append(cid)
-        if not state.selected_targets: state.selected_targets = [TARGETS["MAIN_GROUP"]]
+        if cid in state.selected_targets:
+            state.selected_targets.remove(cid)
+        else:
+            state.selected_targets.append(cid)
+        if not state.selected_targets:
+            state.selected_targets = [TARGETS["MAIN_GROUP"]]
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
 
@@ -732,14 +709,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("START:"):
         mode = data.split(":")[1]
-        if state.running: await stop_session(context.bot, reason="restart")
+        if state.running:
+            await stop_session(context.bot, reason="restart")
         await start_session(context.bot, mode)
         context.application.create_task(engine_loop(context, state.session_id))
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
 
     if data == "STOP:FORCE":
-        if state.running: await stop_session(context.bot, reason="force")
+        if state.running:
+            await stop_session(context.bot, reason="force")
         await q.edit_message_text(panel_text(), parse_mode=ParseMode.HTML, reply_markup=selector_markup())
         return
 
@@ -757,11 +736,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     logging.basicConfig(level=logging.WARNING)
     keep_alive()
+
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("panel", cmd_panel))
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
     application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
