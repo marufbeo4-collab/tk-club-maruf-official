@@ -25,7 +25,7 @@ from telegram.ext import (
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = "8456002611:AAFtqxTZ54FTUJNquuG85JDhMsZPYq3MM-U"
+BOT_TOKEN = "8456002611:AAGfqEKRgs-nfa5ulmU2sBvncE0c-65UvBQ"
 
 BRAND_NAME = "⚡ 𝐓𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐈𝐆𝐍𝐀𝐋 ⚡"
 REG_LINK = "https://tkclub2.com/#/register?invitationCode=18753202056"
